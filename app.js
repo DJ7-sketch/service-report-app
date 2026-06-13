@@ -15,6 +15,8 @@ let savedReportsPage = 1;
 
 const form = document.getElementById("reportForm");
 const printArea = document.getElementById("printArea");
+const printViewport = document.getElementById("printViewport");
+const printFrame = document.getElementById("printFrame");
 const reportList = document.getElementById("reportList");
 const savedCount = document.getElementById("savedCount");
 const errorsBox = document.getElementById("errors");
@@ -483,6 +485,18 @@ function updateAll() {
   renderPreview(formData());
 }
 
+function fitPreviewToWidth() {
+  if (!printViewport || !printFrame || !printArea || window.matchMedia("print").matches) return;
+  printArea.style.setProperty("--preview-scale", "1");
+  const sheetWidth = printArea.offsetWidth;
+  const sheetHeight = printArea.offsetHeight;
+  const availableWidth = Math.max(1, printViewport.clientWidth - 2);
+  const scale = Math.min(1, availableWidth / sheetWidth);
+  printArea.style.setProperty("--preview-scale", String(scale));
+  printFrame.style.width = `${Math.ceil(sheetWidth * scale)}px`;
+  printFrame.style.height = `${Math.ceil(sheetHeight * scale)}px`;
+}
+
 function renderPreview(data) {
   const method = checkedText([
     { label: "Phone", checked: data.requestPhone },
@@ -528,6 +542,7 @@ function renderPreview(data) {
       <strong>LivaNova Korea Ltd.</strong> &nbsp; +82 02. 2138. 0609 &nbsp; Sparkplus #206, Lotte World Wellbeing Center, Olympic-ro 240, Songpa-gu, Seoul
     </footer>
   `;
+  requestAnimationFrame(fitPreviewToWidth);
 }
 function srText(title, body, className) {
   return `<div class="sr-section-title">${escapeHtml(title)}</div><div class="sr-text ${className}">${escapeHtml(body || "-")}</div>`;
@@ -659,6 +674,7 @@ function printReport(validateFirst = true) {
 }
 
 form.addEventListener("input", markDirty);
+window.addEventListener("resize", fitPreviewToWidth);
 workLogRows.addEventListener("input", markDirty);
 partRows.addEventListener("input", markDirty);
 form.addEventListener("submit", (event) => {
@@ -747,3 +763,4 @@ if (authToken && savedUserKey) {
 } else {
   roleSelect.dispatchEvent(new Event("change"));
 }
+requestAnimationFrame(fitPreviewToWidth);
