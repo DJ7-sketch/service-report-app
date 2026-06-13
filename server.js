@@ -166,8 +166,20 @@ const server = http.createServer(async (req, res) => {
         sendJson(res, 400, { error: "reports must be an array" });
         return;
       }
-      writeReports(body.reports);
-      sendJson(res, 200, { ok: true, count: body.reports.length });
+      if (body.mode === "replace") {
+        writeReports(body.reports);
+        sendJson(res, 200, { ok: true, count: body.reports.length, mode: "replace" });
+        return;
+      }
+      const mergedById = new Map(readReports().map((report) => [report.id, report]));
+      body.reports.forEach((report) => {
+        if (report && report.id) mergedById.set(report.id, report);
+      });
+      const mergedReports = Array.from(mergedById.values()).sort((a, b) => {
+        return String(b.updatedAt || b.createdAt || "").localeCompare(String(a.updatedAt || a.createdAt || ""));
+      });
+      writeReports(mergedReports);
+      sendJson(res, 200, { ok: true, count: mergedReports.length, mode: "merge" });
       return;
     }
     serveStatic(req, res);

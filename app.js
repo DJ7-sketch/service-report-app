@@ -244,8 +244,8 @@ function reports() {
     ...report,
   }));
 }
-function saveReports(next) {
-  if (sharedStorageAvailable) requestJson("PUT", "/api/reports", { reports: next });
+function saveReports(next, mode = "merge") {
+  if (sharedStorageAvailable) requestJson("PUT", "/api/reports", { reports: next, mode });
   else writeJson(STORAGE_KEY, next);
   renderAllManagement();
 }
@@ -402,6 +402,9 @@ function newReport(skipConfirm = false) {
   const hasText = form.elements.hospital.value || form.elements.reasonForVisit.value || form.elements.serviceActivity.value;
   if (!skipConfirm && hasText && !confirm("Start a new report and clear the current form?")) return;
   form.reset();
+  form.elements.id.value = "";
+  form.elements.customerSignatureDataUrl.value = "";
+  form.elements.fseSignatureDataUrl.value = "";
   form.elements.country.value = "Korea";
   form.elements.reportDate.value = today();
   syncUserToForm();
@@ -587,7 +590,7 @@ function restoreReport(id) {
 }
 function permanentDelete(id) {
   if (!confirm("Permanent delete cannot be restored. Really delete forever?")) return;
-  saveReports(reports().filter((r) => r.id !== id));
+  saveReports(reports().filter((r) => r.id !== id), "replace");
 }
 function changeStatus(id, status) {
   saveReports(reports().map((r) => r.id === id ? addAudit({ ...r, status, updatedAt: new Date().toISOString() }, "status_changed", `Status changed to ${status}.`) : r));
