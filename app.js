@@ -441,9 +441,15 @@ function saveReport(submit) {
   };
   record = addAudit(record, submit ? "submitted" : existing ? "updated" : "created", submit ? "Report submitted." : "Report saved as draft.");
   saveReports(existing ? all.map((item) => (item.id === record.id ? record : item)) : [record, ...all]);
-  form.elements.id.value = record.id;
-  saveState.textContent = `${record.reportNo} / ${record.status}`;
   renderPreview(record);
+  if (submit) {
+    form.elements.id.value = "";
+    writeJson(DRAFT_KEY, { ...formData(), id: "" });
+    saveState.textContent = `${record.reportNo} / submitted - ready for new`;
+  } else {
+    form.elements.id.value = record.id;
+    saveState.textContent = `${record.reportNo} / ${record.status}`;
+  }
   return true;
 }
 function saveDraft() {
