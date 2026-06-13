@@ -24,6 +24,7 @@ const roleSelect = document.getElementById("roleSelect");
 const loginForm = document.getElementById("loginForm");
 const loginUser = document.getElementById("loginUser");
 const loginPassword = document.getElementById("loginPassword");
+const showPassword = document.getElementById("showPassword");
 const loginMessage = document.getElementById("loginMessage");
 
 const fieldNames = [
@@ -171,6 +172,22 @@ function requestJson(method, url, body) {
     return null;
   }
 }
+function requestStatus(method, url, body) {
+  try {
+    const xhr = new XMLHttpRequest();
+    xhr.open(method, `${API_BASE}${url}`, false);
+    xhr.setRequestHeader("Content-Type", "application/json");
+    if (authToken) xhr.setRequestHeader("Authorization", `Bearer ${authToken}`);
+    xhr.send(body === undefined ? null : JSON.stringify(body));
+    return {
+      ok: xhr.status >= 200 && xhr.status < 300,
+      status: xhr.status,
+      data: xhr.responseText ? JSON.parse(xhr.responseText) : null,
+    };
+  } catch (error) {
+    return { ok: false, status: 0, data: { error: error.message || "Network error" } };
+  }
+}
 function refreshSharedStorageStatus() {
   sharedStorageAvailable = Boolean(requestJson("GET", "/api/health"));
   const badge = document.getElementById("storageBadge");
@@ -180,9 +197,19 @@ function refreshSharedStorageStatus() {
   }
 }
 function login(userKey, password) {
-  const result = requestJson("POST", "/api/login", { userKey, password });
-  if (!result?.token) return false;
-  authToken = result.token;
+  const health = requestStatus("GET", "/api/health");
+  if (!health.ok) {
+    loginMessage.textContent = "API server is not reachable. Wait 30 seconds and try again.";
+    return false;
+  }
+  const result = requestStatus("POST", "/api/login", { userKey, password: password.trim() });
+  if (!result.ok || !result.data?.token) {
+    loginMessage.textContent = result.status === 401
+      ? "Password is incorrect for the selected account."
+      : "Login failed. API server responded with an error.";
+    return false;
+  }
+  authToken = result.data.token;
   sessionStorage.setItem("serviceReportAuthToken", authToken);
   sessionStorage.setItem("serviceReportUserKey", userKey);
   roleSelect.value = userKey;
@@ -659,9 +686,11 @@ function syncUserToForm() {
 loginForm.addEventListener("submit", (event) => {
   event.preventDefault();
   loginMessage.textContent = "";
-  if (!login(loginUser.value, loginPassword.value)) {
-    loginMessage.textContent = "Login failed. Check the password or API server.";
-  }
+  login(loginUser.value, loginPassword.value);
+});
+
+showPassword.addEventListener("change", () => {
+  loginPassword.type = showPassword.checked ? "text" : "password";
 });
 
 newReport(true);
