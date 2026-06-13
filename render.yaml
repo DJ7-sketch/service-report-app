@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: service-report-api
+    env: node
+    plan: free
+    buildCommand: ""
+    startCommand: "node server.js"
+    envVars:
+      - key: PASSWORD_DONGHYEOK
+        sync: false
+      - key: PASSWORD_SANGMIN
+        sync: false
+      - key: PASSWORD_MINHYUK
+        sync: false
+      - key: PASSWORD_ADMIN
+        sync: false
+      - key: CORS_ORIGIN
+        value: "https://dj7-sketch.github.io"

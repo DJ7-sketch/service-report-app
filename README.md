@@ -29,9 +29,11 @@ In Codex preview, use:
 ## Main Features
 
 - Engineer report creation with auto-save
+- Password login for 3 engineers and admin
+- Engineer selection: Donghyeok Jung, Sangmin Lee, Minhyuk Lee
 - Report No. generation: `SR-YYYYMMDD-001`
 - Status workflow: `draft`, `submitted`, `reviewed`, `completed`, `deleted`
-- LivaNova logo in app header and A4 print view
+- Uploaded LivaNova logo image in app header and A4 print view
 - A4 portrait single-page compact report layout
 - Working time rows with automatic Hrs/Mins and total calculation
 - Parts used table
@@ -40,6 +42,7 @@ In Codex preview, use:
 - Admin dashboard, all-report list, search/filter/sort, soft delete, restore, permanent delete
 - Audit logs stored in each report record
 - Shared JSON-file database when served by `server.js`
+- GitHub Pages frontend can connect to a deployed API by setting `config.js`
 - localStorage fallback when opened without the server
 
 ## PDF/Print
@@ -51,6 +54,8 @@ Use the `PDF/Print` button. The print layout is designed as one A4 portrait page
 When using `server.js`, reports are stored in:
 
 `data/reports.json`
+
+Default login passwords are documented in `GITHUB_PAGES_SETUP.md`. Change them with environment variables before real use.
 
 Draft auto-save remains browser-local. This file-based server is suitable for small internal MVP use. For production, replace the JSON file repository with Supabase, Firebase, PostgreSQL, or an internal API, and add real authentication.
 

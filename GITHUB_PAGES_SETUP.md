@@ -7,8 +7,52 @@
 GitHub Pages는 정적 파일만 호스팅합니다. 따라서 `server.js`는 GitHub Pages에서 실행되지 않습니다.
 
 - GitHub Pages 배포: 여러 직원이 같은 URL로 웹앱 접속 가능
-- 데이터 저장: 각 직원 브라우저의 localStorage에 저장
-- 공용 리포트 DB: `server.js`를 사내 서버에서 실행하거나 Supabase/Firebase/API 서버가 필요
+- 공용 리포트 DB: `server.js`를 Render/Railway/사내 서버에서 실행하고 `config.js`에 API 주소를 넣어야 함
+- API 서버가 없으면 각 직원 브라우저의 localStorage fallback으로 동작함
+
+## 공용 DB와 비밀번호 로그인을 쓰려면
+
+1. `server.js`를 Render, Railway, 사내 서버, NAS, VPS 중 하나에 배포합니다.
+2. 배포된 API 주소를 확인합니다. 예: `https://service-report-api.onrender.com`
+3. GitHub repository의 `config.js`를 다음처럼 수정합니다.
+
+```js
+window.SERVICE_REPORT_API_BASE = "https://service-report-api.onrender.com";
+```
+
+4. GitHub Pages가 다시 배포되면 홈페이지 로그인과 공용 리포트 누적이 활성화됩니다.
+
+### Render 배포 예시
+
+1. Render.com에서 `New` > `Web Service` 선택
+2. GitHub의 `service-report-app` repository 연결
+3. Runtime은 `Node`
+4. Build Command는 비워둠
+5. Start Command는 `node server.js`
+6. Environment Variables에 아래 비밀번호를 설정
+7. 배포 후 나온 URL을 `config.js`의 `SERVICE_REPORT_API_BASE`에 입력
+
+주의: Render 무료 플랜은 재시작 시 파일 저장소가 유지되지 않을 수 있습니다. 운영에서는 Render Disk, Railway Volume, Supabase, Firebase, PostgreSQL 등 영구 저장소를 사용하세요.
+
+기본 비밀번호는 아래와 같습니다. 운영 전에 서버 환경변수로 꼭 변경하세요.
+
+| User | Default password | Environment variable |
+| --- | --- | --- |
+| Donghyeok Jung | `DJ2026!` | `PASSWORD_DONGHYEOK` |
+| Sangmin Lee | `SL2026!` | `PASSWORD_SANGMIN` |
+| Minhyuk Lee | `ML2026!` | `PASSWORD_MINHYUK` |
+| Service Manager | `admin2026!` | `PASSWORD_ADMIN` |
+
+선택 환경변수:
+
+```text
+PORT=4173
+CORS_ORIGIN=https://DJ7-sketch.github.io
+PASSWORD_DONGHYEOK=원하는비밀번호
+PASSWORD_SANGMIN=원하는비밀번호
+PASSWORD_MINHYUK=원하는비밀번호
+PASSWORD_ADMIN=원하는비밀번호
+```
 
 ## GitHub 웹사이트에서 직접 배포
 

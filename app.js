@@ -1,10 +1,15 @@
 const STORAGE_KEY = "medical-service-reports-v3";
 const DRAFT_KEY = "medical-service-report-draft-v3";
+const API_BASE = (window.SERVICE_REPORT_API_BASE || "").replace(/\/$/, "");
 let sharedStorageAvailable = false;
+let authToken = sessionStorage.getItem("serviceReportAuthToken") || "";
 const users = {
-  engineer: { name: "Minhyuk Lee", role: "engineer" },
+  "engineer-donghyeok": { name: "Donghyeok Jung", role: "engineer" },
+  "engineer-sangmin": { name: "Sangmin Lee", role: "engineer" },
+  "engineer-minhyuk": { name: "Minhyuk Lee", role: "engineer" },
   admin: { name: "Service Manager", role: "admin" },
 };
+const engineerNames = ["Donghyeok Jung", "Sangmin Lee", "Minhyuk Lee"];
 
 const form = document.getElementById("reportForm");
 const printArea = document.getElementById("printArea");
@@ -16,6 +21,10 @@ const workLogRows = document.getElementById("workLogRows");
 const partRows = document.getElementById("partRows");
 const totalWorkTime = document.getElementById("totalWorkTime");
 const roleSelect = document.getElementById("roleSelect");
+const loginForm = document.getElementById("loginForm");
+const loginUser = document.getElementById("loginUser");
+const loginPassword = document.getElementById("loginPassword");
+const loginMessage = document.getElementById("loginMessage");
 
 const fieldNames = [
   "id", "country", "hospital", "customerName", "installationSite", "deviceModel", "serialNo",
@@ -126,7 +135,7 @@ function createId() {
   return crypto.randomUUID ? crypto.randomUUID() : `id-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 function currentUser() {
-  return users[roleSelect.value] || users.engineer;
+  return users[roleSelect.value] || users["engineer-minhyuk"];
 }
 function today() {
   return new Date().toISOString().slice(0, 10);
@@ -144,8 +153,9 @@ function writeJson(key, value) {
 function requestJson(method, url, body) {
   try {
     const xhr = new XMLHttpRequest();
-    xhr.open(method, url, false);
+    xhr.open(method, `${API_BASE}${url}`, false);
     xhr.setRequestHeader("Content-Type", "application/json");
+    if (authToken) xhr.setRequestHeader("Authorization", `Bearer ${authToken}`);
     xhr.send(body === undefined ? null : JSON.stringify(body));
     if (xhr.status < 200 || xhr.status >= 300) throw new Error(xhr.statusText);
     return xhr.responseText ? JSON.parse(xhr.responseText) : null;
@@ -160,6 +170,22 @@ function refreshSharedStorageStatus() {
     badge.textContent = sharedStorageAvailable ? "Shared server DB" : "Local browser DB";
     badge.className = sharedStorageAvailable ? "storage-badge shared" : "storage-badge local";
   }
+}
+function login(userKey, password) {
+  const result = requestJson("POST", "/api/login", { userKey, password });
+  if (!result?.token) return false;
+  authToken = result.token;
+  sessionStorage.setItem("serviceReportAuthToken", authToken);
+  sessionStorage.setItem("serviceReportUserKey", userKey);
+  roleSelect.value = userKey;
+  roleSelect.disabled = true;
+  document.body.classList.remove("locked");
+  document.getElementById("authGate").hidden = true;
+  refreshSharedStorageStatus();
+  syncUserToForm();
+  roleSelect.dispatchEvent(new Event("change"));
+  renderAllManagement();
+  return true;
 }
 function reports() {
   const source = sharedStorageAvailable ? requestJson("GET", "/api/reports") || [] : readJson(STORAGE_KEY, []);
@@ -241,7 +267,11 @@ function renderWorkLogs(logs) {
 function workLogRow(log) {
   return `<tr data-id="${compact(log.id || createId())}">
     <td><input type="date" data-field="date" value="${compact(log.date, "")}" /></td>
-    <td><input data-field="engineer" value="${compact(log.engineer, "")}" /></td>
+    <td>
+      <select data-field="engineer">
+        ${engineerNames.map((name) => `<option value="${name}" ${name === log.engineer ? "selected" : ""}>${name}</option>`).join("")}
+      </select>
+    </td>
     <td><input type="time" data-field="start" value="${compact(log.start, "")}" /></td>
     <td><input type="time" data-field="end" value="${compact(log.end, "")}" /></td>
     <td><input data-field="hrs" value="${compact(log.hrs || 0)}" readonly /></td>
@@ -327,6 +357,7 @@ function newReport(skipConfirm = false) {
   form.reset();
   form.elements.country.value = "Korea";
   form.elements.reportDate.value = today();
+  syncUserToForm();
   renderWorkLogs([defaultWorkLog()]);
   renderParts([]);
   customerPad.load("");
@@ -397,7 +428,7 @@ function renderPreview(data) {
         <h2>SERVICE REPORT</h2>
         <div class="meta-line">${compact(data.reportNo || "Not submitted")} &nbsp; | &nbsp; ${compact(status)}</div>
       </div>
-      <img src="./livanova-logo.svg" alt="LivaNova" />
+      <img src="./livanova-logo.png" alt="LivaNova" />
     </div>
     <table class="sr-info">
       <tbody>
@@ -484,7 +515,7 @@ function renderAllManagement() {
   const all = reports();
   savedCount.textContent = String(all.filter((r) => r.status !== "deleted").length);
   reportList.innerHTML = all.filter((r) => r.status !== "deleted").slice(0, 8).map((r) => `<article class="report-item"><strong>${compact(r.hospital)}</strong><small>${compact(r.reportNo)} / ${compact(r.deviceModel)} / ${compact(r.reportDate)}</small><small>${statusBadge(r.status)}</small><div class="item-actions"><button data-load="${r.id}">Load</button><button data-list-delete="${r.id}">Delete</button></div></article>`).join("") || '<p class="empty-list">No saved reports.</p>';
-  renderCards(document.getElementById("engineerReports"), all.filter((r) => r.createdBy?.name === users.engineer.name || r.fseName === users.engineer.name));
+  renderCards(document.getElementById("engineerReports"), all.filter((r) => r.createdBy?.name === currentUser().name || r.fseName === currentUser().name));
   renderCards(document.getElementById("adminReports"), filteredReports());
   renderCards(document.getElementById("trashReports"), all.filter((r) => r.status === "deleted"), true);
   const count = (s) => all.filter((r) => r.status === s).length;
@@ -593,12 +624,37 @@ document.body.addEventListener("click", (event) => {
 roleSelect.addEventListener("change", () => {
   const isAdmin = roleSelect.value === "admin";
   document.querySelectorAll("[data-admin-only]").forEach((el) => el.hidden = !isAdmin);
+  syncUserToForm();
   if (!isAdmin && !["createView", "engineerReportsView"].includes(document.querySelector(".view:not(.hidden)")?.id)) showView("createView");
+});
+
+function syncUserToForm() {
+  const user = currentUser();
+  if (user.role === "engineer" && form.elements.fseName) {
+    form.elements.fseName.value = user.name;
+  }
+}
+
+loginForm.addEventListener("submit", (event) => {
+  event.preventDefault();
+  loginMessage.textContent = "";
+  if (!login(loginUser.value, loginPassword.value)) {
+    loginMessage.textContent = "Login failed. Check the password or API server.";
+  }
 });
 
 newReport(true);
 const draft = readJson(DRAFT_KEY, null);
 if (draft) fillForm(draft);
 refreshSharedStorageStatus();
-roleSelect.dispatchEvent(new Event("change"));
-renderAllManagement();
+const savedUserKey = sessionStorage.getItem("serviceReportUserKey");
+if (authToken && savedUserKey) {
+  roleSelect.value = savedUserKey;
+  roleSelect.disabled = true;
+  document.body.classList.remove("locked");
+  document.getElementById("authGate").hidden = true;
+  roleSelect.dispatchEvent(new Event("change"));
+  renderAllManagement();
+} else {
+  roleSelect.dispatchEvent(new Event("change"));
+}
