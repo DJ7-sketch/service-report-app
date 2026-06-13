@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Service Report</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <header class="app-header no-print">
+      <div class="brand">
+        <img src="./livanova-logo.svg" alt="LivaNova" class="brand-logo" />
+        <div>
+          <p class="eyebrow">Field Service</p>
+          <h1>SERVICE REPORT</h1>
+        </div>
+      </div>
+      <label class="role-select">
+        <span>Role</span>
+        <select id="roleSelect">
+          <option value="engineer">Engineer: Minhyuk Lee</option>
+          <option value="admin">Admin: Service Manager</option>
+        </select>
+      </label>
+      <div id="storageBadge" class="storage-badge local">Local browser DB</div>
+      <nav class="top-nav" aria-label="Application navigation">
+        <button type="button" data-view="createView">Create</button>
+        <button type="button" data-view="engineerReportsView">My Reports</button>
+        <button type="button" data-view="adminDashboardView" data-admin-only>Admin</button>
+        <button type="button" data-view="adminReportsView" data-admin-only>All Reports</button>
+        <button type="button" data-view="trashView" data-admin-only>Trash</button>
+      </nav>
+    </header>
+
+    <main class="shell">
+      <section class="notice no-print">
+        Do not enter patient names, resident numbers, medical records, or other patient personal information.
+        Drafts are auto-saved in this browser.
+      </section>
+
+      <section id="createView" class="view">
+        <div class="workspace">
+          <aside class="report-list no-print">
+            <div class="panel-heading">
+              <h2>Saved Reports</h2>
+              <span id="savedCount">0</span>
+            </div>
+            <div id="reportList" class="list"></div>
+          </aside>
+
+          <form id="reportForm" class="form-panel no-print" novalidate>
+            <input type="hidden" name="id" />
+            <input type="hidden" name="customerSignatureDataUrl" />
+            <input type="hidden" name="fseSignatureDataUrl" />
+            <div class="panel-heading sticky-heading">
+              <h2>Report Form</h2>
+              <span id="saveState">Draft</span>
+            </div>
+
+            <fieldset>
+              <legend>Request Information</legend>
+              <div class="grid three">
+                <label><span>Country</span><input name="country" placeholder="Korea" /></label>
+                <label><span>Hospital <b>*</b></span><input name="hospital" required /></label>
+                <label><span>Customer Name <b>*</b></span><input name="customerName" required /></label>
+                <label><span>Installation Site</span><input name="installationSite" /></label>
+                <label><span>Device / Model <b>*</b></span><input name="deviceModel" required /></label>
+                <label><span>Serial No. <b>*</b></span><input name="serialNo" required /></label>
+                <label><span>Manuf. Date</span><input type="date" name="manufDate" /></label>
+                <label><span>Install Date</span><input type="date" name="installDate" /></label>
+                <label><span>Report Date</span><input type="date" name="reportDate" /></label>
+              </div>
+              <div class="choice-row">
+                <div>
+                  <span class="group-label">Request Method</span>
+                  <label class="check"><input type="checkbox" name="requestPhone" /> Phone</label>
+                  <label class="check"><input type="checkbox" name="requestDistributor" /> Distributor</label>
+                  <label class="check"><input type="checkbox" name="requestOther" /> Other</label>
+                </div>
+                <label><span>Other detail</span><input name="requestOtherText" /></label>
+              </div>
+              <div class="choice-row single">
+                <div>
+                  <span class="group-label">Service Type</span>
+                  <label class="check"><input type="checkbox" name="serviceWarranty" /> Warranty</label>
+                  <label class="check"><input type="checkbox" name="serviceContract" /> Service contract</label>
+                  <label class="check"><input type="checkbox" name="serviceOnCall" /> On-call</label>
+                </div>
+              </div>
+            </fieldset>
+
+            <fieldset>
+              <legend>Reason for Visit</legend>
+              <textarea name="reasonForVisit" rows="4" required placeholder="Enter symptoms, customer request, and visit reason."></textarea>
+            </fieldset>
+
+            <fieldset>
+              <legend>Service Activity</legend>
+              <textarea name="serviceActivity" rows="5" required placeholder="- Inspection&#10;- Action taken&#10;- Recommendation"></textarea>
+            </fieldset>
+
+            <fieldset>
+              <div class="section-title-row">
+                <legend>Working Time</legend>
+                <button class="secondary small" type="button" id="addWorkLogBtn">Add row</button>
+              </div>
+              <div class="table-wrap">
+                <table class="edit-table">
+                  <thead>
+                    <tr><th>Date</th><th>Engineer</th><th>Start</th><th>End</th><th>Hrs</th><th>Mins</th><th>Type</th><th></th></tr>
+                  </thead>
+                  <tbody id="workLogRows"></tbody>
+                </table>
+              </div>
+              <div class="total-line">Total: <strong id="totalWorkTime">0 Hrs 0 Mins</strong></div>
+            </fieldset>
+
+            <fieldset>
+              <div class="section-title-row">
+                <legend>Parts Used</legend>
+                <button class="secondary small" type="button" id="addPartBtn">Add part</button>
+              </div>
+              <div class="table-wrap">
+                <table class="edit-table">
+                  <thead>
+                    <tr><th>Part Number</th><th>Description</th><th>Qty</th><th>Remarks</th><th></th></tr>
+                  </thead>
+                  <tbody id="partRows"></tbody>
+                </table>
+              </div>
+            </fieldset>
+
+            <fieldset>
+              <legend>Signatures</legend>
+              <div class="grid two">
+                <label><span>Customer Name</span><input name="signatureCustomerName" /></label>
+                <label><span>FSE Name <b>*</b></span><input name="fseName" required /></label>
+              </div>
+              <div class="signature-grid">
+                <div class="signature-box">
+                  <div class="signature-head"><span>Customer Signature</span><button type="button" class="small secondary" data-clear-signature="customer">Clear</button></div>
+                  <canvas id="customerSignatureCanvas" width="720" height="220" aria-label="Customer Signature"></canvas>
+                </div>
+                <div class="signature-box">
+                  <div class="signature-head"><span>FSE Signature</span><button type="button" class="small secondary" data-clear-signature="fse">Clear</button></div>
+                  <canvas id="fseSignatureCanvas" width="720" height="220" aria-label="FSE Signature"></canvas>
+                </div>
+              </div>
+            </fieldset>
+
+            <div id="errors" class="errors" role="alert"></div>
+            <div class="cta-row">
+              <button class="secondary" type="button" id="newReportBtn">New</button>
+              <button class="secondary" type="button" id="draftBtn">Save draft</button>
+              <button class="secondary" type="button" id="loadDraftBtn">Load auto-save</button>
+              <button class="primary" type="submit">Submit</button>
+              <button class="primary" type="button" id="printBtn">PDF/Print</button>
+            </div>
+          </form>
+
+          <section class="preview-panel">
+            <div class="panel-heading no-print">
+              <h2>A4 Preview</h2>
+              <span>Single page layout</span>
+            </div>
+            <article id="printArea" class="print-sheet"></article>
+          </section>
+        </div>
+      </section>
+
+      <section id="engineerReportsView" class="view hidden">
+        <div class="wide-panel">
+          <div class="panel-heading"><h2>My Reports</h2><button type="button" class="secondary" data-view="createView">Create Report</button></div>
+          <div id="engineerReports"></div>
+        </div>
+      </section>
+
+      <section id="adminDashboardView" class="view hidden">
+        <div class="admin-layout">
+          <aside class="admin-side"><strong>Admin</strong><button data-view="adminReportsView">All Reports</button><button data-view="trashView">Trash</button></aside>
+          <div class="wide-panel">
+            <h2>Dashboard</h2>
+            <div id="dashboardCards" class="dashboard-cards"></div>
+            <h3>Recent Reports</h3>
+            <div id="recentReports"></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="adminReportsView" class="view hidden">
+        <div class="admin-layout">
+          <aside class="admin-side"><strong>Admin</strong><button data-view="adminDashboardView">Dashboard</button><button data-view="trashView">Trash</button></aside>
+          <div class="wide-panel">
+            <div class="panel-heading"><h2>All Reports</h2><button type="button" class="primary" data-view="createView">Create</button></div>
+            <div class="filters">
+              <input id="searchInput" placeholder="Search hospital, customer, device, serial, FSE, report no." />
+              <select id="statusFilter"><option value="active">Active</option><option value="all">All</option><option value="draft">draft</option><option value="submitted">submitted</option><option value="reviewed">reviewed</option><option value="completed">completed</option></select>
+              <select id="dateFilter"><option value="all">All dates</option><option value="today">Today</option><option value="7">Last 7 days</option><option value="30">Last 30 days</option></select>
+              <select id="sortSelect"><option value="newest">Newest</option><option value="oldest">Oldest</option><option value="hospital">Hospital A-Z</option><option value="updated">Recently updated</option></select>
+            </div>
+            <div id="adminReports"></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="trashView" class="view hidden">
+        <div class="admin-layout">
+          <aside class="admin-side"><strong>Admin</strong><button data-view="adminDashboardView">Dashboard</button><button data-view="adminReportsView">All Reports</button></aside>
+          <div class="wide-panel">
+            <h2>Trash</h2>
+            <div id="trashReports"></div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <script src="./app.js"></script>
+  </body>
+</html>
