@@ -147,7 +147,8 @@ h2 { margin-bottom: 0; font-size: 1.08rem; }
 }
 .preview-panel {
   max-height: calc(100vh - 104px);
-  overflow: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 .panel-heading, .section-title-row {
   display: flex;
@@ -247,9 +248,10 @@ canvas {
 
 /* A4 single-page report */
 .print-sheet {
-  width: 210mm;
-  max-width: none;
-  height: 297mm;
+  width: 100%;
+  max-width: 210mm;
+  min-height: min(297mm, calc((100vw - 80px) * 1.414));
+  height: auto;
   aspect-ratio: 210 / 297;
   margin: 0 auto;
   overflow: hidden;
