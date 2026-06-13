@@ -95,6 +95,7 @@ h2 { margin-bottom: 0; font-size: 1.08rem; }
 .role-select { display: grid; gap: 4px; margin: 0; }
 .role-select span { font-size: .78rem; color: var(--muted); font-weight: 800; }
 .storage-badge {
+  display: none;
   justify-self: start;
   padding: 7px 10px;
   border-radius: 999px;
@@ -285,16 +286,36 @@ canvas {
   gap: 4mm;
   margin-top: 3mm;
 }
-.sr-signatures figure { margin: 0; border: .45pt solid #333; }
-.sr-signatures img, .no-sign {
+.sr-signatures figure {
+  display: grid;
+  grid-template-rows: 15mm auto;
+  margin: 0;
+  border: .45pt solid #333;
+  overflow: hidden;
+}
+.sr-signatures img {
+  display: block;
+  width: 82%;
+  max-width: 56mm;
+  height: 11mm;
+  margin: 2mm auto;
+  object-fit: contain;
+  object-position: center;
+}
+.no-sign {
   display: grid;
   place-items: center;
   width: 100%;
-  height: 17mm;
-  object-fit: contain;
+  height: 15mm;
   border-bottom: .45pt solid #333;
 }
-.sr-signatures figcaption { padding: 1mm; text-align: center; font-weight: 800; }
+.sr-signatures figcaption {
+  min-height: 5mm;
+  padding: .7mm 1mm;
+  border-top: .45pt solid #333;
+  text-align: center;
+  font-weight: 800;
+}
 .sr-footer {
   margin-top: 3mm;
   padding-top: 1.5mm;

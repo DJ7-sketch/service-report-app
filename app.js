@@ -83,6 +83,13 @@ class SignaturePad {
     this.ctx.font = "13px Arial";
     this.ctx.fillText("Sign here", 12, 22);
   }
+  clearGuide() {
+    if (this.hiddenInput.value) return;
+    const rect = this.canvas.getBoundingClientRect();
+    this.ctx.clearRect(0, 0, rect.width, rect.height);
+    this.ctx.fillStyle = "#fff";
+    this.ctx.fillRect(0, 0, rect.width, rect.height);
+  }
   point(event) {
     const rect = this.canvas.getBoundingClientRect();
     return { x: event.clientX - rect.left, y: event.clientY - rect.top };
@@ -92,6 +99,7 @@ class SignaturePad {
     this.canvas.setPointerCapture(event.pointerId);
     const p = this.point(event);
     this.drawing = true;
+    this.clearGuide();
     this.ctx.beginPath();
     this.ctx.moveTo(p.x, p.y);
   }
@@ -186,6 +194,18 @@ function login(userKey, password) {
   roleSelect.dispatchEvent(new Event("change"));
   renderAllManagement();
   return true;
+}
+function logout() {
+  authToken = "";
+  sessionStorage.removeItem("serviceReportAuthToken");
+  sessionStorage.removeItem("serviceReportUserKey");
+  roleSelect.disabled = false;
+  loginPassword.value = "";
+  loginMessage.textContent = "";
+  document.body.classList.add("locked");
+  document.getElementById("authGate").hidden = false;
+  sharedStorageAvailable = false;
+  refreshSharedStorageStatus();
 }
 function reports() {
   const source = sharedStorageAvailable ? requestJson("GET", "/api/reports") || [] : readJson(STORAGE_KEY, []);
@@ -588,6 +608,7 @@ document.getElementById("newReportBtn").addEventListener("click", () => newRepor
 document.getElementById("draftBtn").addEventListener("click", () => saveReport(false));
 document.getElementById("loadDraftBtn").addEventListener("click", () => fillForm(readJson(DRAFT_KEY, formData())));
 document.getElementById("printBtn").addEventListener("click", () => printReport(true));
+document.getElementById("logoutBtn").addEventListener("click", logout);
 document.getElementById("addWorkLogBtn").addEventListener("click", () => {
   workLogRows.insertAdjacentHTML("beforeend", workLogRow(defaultWorkLog()));
   markDirty();
