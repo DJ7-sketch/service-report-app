@@ -10,6 +10,8 @@ const users = {
   admin: { name: "Service Manager", role: "admin" },
 };
 const engineerNames = ["Donghyeok Jung", "Sangmin Lee", "Minhyuk Lee"];
+const SAVED_REPORTS_PAGE_SIZE = 5;
+let savedReportsPage = 1;
 
 const form = document.getElementById("reportForm");
 const printArea = document.getElementById("printArea");
@@ -297,6 +299,8 @@ function formData() {
     if (!el) return;
     data[name] = el.type === "checkbox" ? el.checked : el.value.trim();
   });
+  if (form.dataset.reportNo) data.reportNo = form.dataset.reportNo;
+  if (form.dataset.status) data.status = form.dataset.status;
   data.workLogs = collectWorkLogs();
   data.parts = collectParts().filter((part) => part.partNumber || part.description || part.qty !== "" || part.remarks);
   return data;
@@ -394,17 +398,21 @@ function fillForm(report) {
   renderParts(report.parts || []);
   customerPad.load(report.customerSignatureDataUrl || "");
   fsePad.load(report.fseSignatureDataUrl || "");
+  form.dataset.reportNo = report.reportNo || "";
+  form.dataset.status = report.status || "draft";
   saveState.textContent = `${report.reportNo || "Draft"} / ${report.status || "draft"}`;
   updateAll();
   showView("createView");
 }
 function newReport(skipConfirm = false) {
   const hasText = form.elements.hospital.value || form.elements.reasonForVisit.value || form.elements.serviceActivity.value;
-  if (!skipConfirm && hasText && !confirm("Start a new report and clear the current form?")) return;
+  if (!skipConfirm && hasText && !confirm("Clear only the current form and start a new report?\n\nSubmitted reports will stay in Saved Reports.")) return;
   form.reset();
   form.elements.id.value = "";
   form.elements.customerSignatureDataUrl.value = "";
   form.elements.fseSignatureDataUrl.value = "";
+  form.dataset.reportNo = "";
+  form.dataset.status = "";
   form.elements.country.value = "Korea";
   form.elements.reportDate.value = today();
   syncUserToForm();
@@ -441,10 +449,15 @@ function saveReport(submit) {
   };
   record = addAudit(record, submit ? "submitted" : existing ? "updated" : "created", submit ? "Report submitted." : "Report saved as draft.");
   saveReports(existing ? all.map((item) => (item.id === record.id ? record : item)) : [record, ...all]);
+  form.dataset.reportNo = record.reportNo;
+  form.dataset.status = record.status;
   renderPreview(record);
   if (submit) {
+    const cleanDraft = { ...formData(), id: "" };
+    delete cleanDraft.reportNo;
+    delete cleanDraft.status;
     form.elements.id.value = "";
-    writeJson(DRAFT_KEY, { ...formData(), id: "" });
+    writeJson(DRAFT_KEY, cleanDraft);
     saveState.textContent = `${record.reportNo} / submitted - ready for new`;
   } else {
     form.elements.id.value = record.id;
@@ -457,6 +470,10 @@ function saveDraft() {
   saveState.textContent = "Auto-saved";
 }
 function markDirty() {
+  if (!form.elements.id.value && form.dataset.status === "submitted") {
+    form.dataset.reportNo = "";
+    form.dataset.status = "";
+  }
   updateAll();
   window.clearTimeout(markDirty.timer);
   markDirty.timer = window.setTimeout(saveDraft, 300);
@@ -569,8 +586,16 @@ function filteredReports() {
 }
 function renderAllManagement() {
   const all = reports();
-  savedCount.textContent = String(all.filter((r) => r.status !== "deleted").length);
-  reportList.innerHTML = all.filter((r) => r.status !== "deleted").slice(0, 8).map((r) => `<article class="report-item"><strong>${compact(r.hospital)}</strong><small>${compact(r.reportNo)} / ${compact(r.deviceModel)} / ${compact(r.reportDate)}</small><small>${statusBadge(r.status)}</small><div class="item-actions"><button data-load="${r.id}">Load</button><button data-list-delete="${r.id}">Delete</button></div></article>`).join("") || '<p class="empty-list">No saved reports.</p>';
+  const savedReports = all.filter((r) => r.status !== "deleted");
+  const savedPages = Math.max(1, Math.ceil(savedReports.length / SAVED_REPORTS_PAGE_SIZE));
+  savedReportsPage = Math.min(Math.max(1, savedReportsPage), savedPages);
+  const savedStart = (savedReportsPage - 1) * SAVED_REPORTS_PAGE_SIZE;
+  const visibleSavedReports = savedReports.slice(savedStart, savedStart + SAVED_REPORTS_PAGE_SIZE);
+  savedCount.textContent = String(savedReports.length);
+  reportList.innerHTML = visibleSavedReports.map((r) => `<article class="report-item"><strong>${compact(r.hospital)}</strong><small>${compact(r.reportNo)} / ${compact(r.deviceModel)} / ${compact(r.reportDate)}</small><small>${statusBadge(r.status)}</small><div class="item-actions"><button data-load="${r.id}">Load</button><button data-list-delete="${r.id}">Delete</button></div></article>`).join("") || '<p class="empty-list">No saved reports.</p>';
+  if (savedReports.length > SAVED_REPORTS_PAGE_SIZE) {
+    reportList.insertAdjacentHTML("beforeend", `<div class="list-pager"><button data-saved-page="${savedReportsPage - 1}" ${savedReportsPage <= 1 ? "disabled" : ""}>Prev</button><span>${savedReportsPage} / ${savedPages}</span><button data-saved-page="${savedReportsPage + 1}" ${savedReportsPage >= savedPages ? "disabled" : ""}>Next</button></div>`);
+  }
   renderCards(document.getElementById("engineerReports"), all.filter((r) => r.createdBy?.name === currentUser().name || r.fseName === currentUser().name));
   renderCards(document.getElementById("adminReports"), filteredReports());
   renderCards(document.getElementById("trashReports"), all.filter((r) => r.status === "deleted"), true);
@@ -676,6 +701,11 @@ document.body.addEventListener("click", (event) => {
   if (load) fillForm(reports().find((r) => r.id === load));
   const listDelete = event.target.dataset.listDelete;
   if (listDelete) softDelete(listDelete);
+  const savedPage = event.target.dataset.savedPage;
+  if (savedPage) {
+    savedReportsPage = Number(savedPage);
+    renderAllManagement();
+  }
 });
 ["searchInput", "statusFilter", "dateFilter", "sortSelect"].forEach((id) => document.getElementById(id)?.addEventListener("input", renderAllManagement));
 roleSelect.addEventListener("change", () => {
