@@ -1,6 +1,7 @@
 const http = require("http");
 const fs = require("fs");
 const path = require("path");
+const { Pool } = require("pg");
 
 const HOST = process.env.HOST || "0.0.0.0";
 const PORT = Number(process.env.PORT || 4173);
@@ -8,6 +9,12 @@ const ROOT = __dirname;
 const DATA_DIR = process.env.REPORT_DATA_DIR || process.env.DATA_DIR || path.join(ROOT, "data");
 const DB_FILE = path.join(DATA_DIR, "reports.json");
 const BACKUP_FILE = path.join(DATA_DIR, "reports-backup.json");
+const DATABASE_URL = process.env.DATABASE_URL || "";
+const pgPool = DATABASE_URL ? new Pool({
+  connectionString: DATABASE_URL,
+  ssl: { rejectUnauthorized: false },
+}) : null;
+let postgresReady = false;
 const sessions = new Map();
 const users = {
   "engineer-donghyeok": {
@@ -63,6 +70,94 @@ function writeReports(reports) {
   const tempFile = `${DB_FILE}.tmp`;
   fs.writeFileSync(tempFile, `${JSON.stringify(reports, null, 2)}\n`, "utf8");
   fs.renameSync(tempFile, DB_FILE);
+}
+
+async function ensurePostgres() {
+  if (!pgPool || postgresReady) return;
+  await pgPool.query(`
+    create table if not exists service_reports (
+      id text primary key,
+      report jsonb not null,
+      created_at timestamptz default now(),
+      updated_at timestamptz default now()
+    )
+  `);
+  await pgPool.query(`
+    create index if not exists service_reports_updated_at_idx
+    on service_reports (updated_at desc)
+  `);
+  postgresReady = true;
+}
+
+async function readStoredReports() {
+  if (!pgPool) return readReports();
+  await ensurePostgres();
+  const result = await pgPool.query("select report from service_reports order by updated_at desc");
+  return result.rows.map((row) => row.report);
+}
+
+async function replaceStoredReports(reports) {
+  if (!pgPool) {
+    writeReports(reports);
+    return reports.length;
+  }
+  await ensurePostgres();
+  const client = await pgPool.connect();
+  try {
+    await client.query("begin");
+    await client.query("delete from service_reports");
+    for (const report of reports) {
+      if (!report || !report.id) continue;
+      await client.query(
+        `insert into service_reports (id, report, created_at, updated_at)
+         values ($1, $2::jsonb, coalesce($3::timestamptz, now()), coalesce($4::timestamptz, now()))`,
+        [report.id, JSON.stringify(report), report.createdAt || null, report.updatedAt || report.createdAt || null],
+      );
+    }
+    await client.query("commit");
+    return reports.length;
+  } catch (error) {
+    await client.query("rollback");
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+async function upsertStoredReports(reports) {
+  if (!pgPool) {
+    const mergedById = new Map(readReports().map((report) => [report.id, report]));
+    reports.forEach((report) => {
+      if (report && report.id) mergedById.set(report.id, report);
+    });
+    const mergedReports = Array.from(mergedById.values()).sort((a, b) => {
+      return String(b.updatedAt || b.createdAt || "").localeCompare(String(a.updatedAt || a.createdAt || ""));
+    });
+    writeReports(mergedReports);
+    return mergedReports.length;
+  }
+  await ensurePostgres();
+  const client = await pgPool.connect();
+  try {
+    await client.query("begin");
+    for (const report of reports) {
+      if (!report || !report.id) continue;
+      await client.query(
+        `insert into service_reports (id, report, created_at, updated_at)
+         values ($1, $2::jsonb, coalesce($3::timestamptz, now()), coalesce($4::timestamptz, now()))
+         on conflict (id) do update set report = excluded.report, updated_at = excluded.updated_at`,
+        [report.id, JSON.stringify(report), report.createdAt || null, report.updatedAt || report.createdAt || null],
+      );
+    }
+    await client.query("commit");
+  } catch (error) {
+    await client.query("rollback");
+    throw error;
+  } finally {
+    client.release();
+  }
+  const result = await pgPool.query("select count(*)::int as count from service_reports");
+  return result.rows[0].count;
 }
 
 function sendJson(res, status, value) {
@@ -141,7 +236,8 @@ const server = http.createServer(async (req, res) => {
       return;
     }
     if (req.url === "/api/health") {
-      sendJson(res, 200, { ok: true, storage: "json-file", dataDir: DATA_DIR });
+      if (pgPool) await ensurePostgres();
+      sendJson(res, 200, { ok: true, storage: pgPool ? "postgres" : "json-file", dataDir: pgPool ? null : DATA_DIR });
       return;
     }
     if (req.url === "/api/login" && req.method === "POST") {
@@ -159,7 +255,7 @@ const server = http.createServer(async (req, res) => {
     if (req.url === "/api/reports" && req.method === "GET") {
       const user = requireUser(req, res);
       if (!user) return;
-      sendJson(res, 200, readReports());
+      sendJson(res, 200, await readStoredReports());
       return;
     }
     if (req.url === "/api/reports" && req.method === "PUT") {
@@ -171,19 +267,12 @@ const server = http.createServer(async (req, res) => {
         return;
       }
       if (body.mode === "replace") {
-        writeReports(body.reports);
-        sendJson(res, 200, { ok: true, count: body.reports.length, mode: "replace" });
+        const count = await replaceStoredReports(body.reports);
+        sendJson(res, 200, { ok: true, count, mode: "replace", storage: pgPool ? "postgres" : "json-file" });
         return;
       }
-      const mergedById = new Map(readReports().map((report) => [report.id, report]));
-      body.reports.forEach((report) => {
-        if (report && report.id) mergedById.set(report.id, report);
-      });
-      const mergedReports = Array.from(mergedById.values()).sort((a, b) => {
-        return String(b.updatedAt || b.createdAt || "").localeCompare(String(a.updatedAt || a.createdAt || ""));
-      });
-      writeReports(mergedReports);
-      sendJson(res, 200, { ok: true, count: mergedReports.length, mode: "merge" });
+      const count = await upsertStoredReports(body.reports);
+      sendJson(res, 200, { ok: true, count, mode: "merge", storage: pgPool ? "postgres" : "json-file" });
       return;
     }
     serveStatic(req, res);
