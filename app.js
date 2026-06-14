@@ -223,6 +223,7 @@ function login(userKey, password) {
   refreshSharedStorageStatus();
   syncUserToForm();
   roleSelect.dispatchEvent(new Event("change"));
+  migrateLocalReportsToServer();
   renderAllManagement();
   return true;
 }
@@ -239,7 +240,7 @@ function logout() {
   refreshSharedStorageStatus();
 }
 function reports() {
-  const source = sharedStorageAvailable ? requestJson("GET", "/api/reports") || [] : readJson(STORAGE_KEY, []);
+  const source = sharedStorageAvailable ? requestJson("GET", "/api/reports") || [] : [];
   return source.map((report) => ({
     status: report.status || (report.completedAt ? "submitted" : "draft"),
     auditLogs: report.auditLogs || [],
@@ -249,9 +250,34 @@ function reports() {
   }));
 }
 function saveReports(next, mode = "merge") {
-  if (sharedStorageAvailable) requestJson("PUT", "/api/reports", { reports: next, mode });
-  else writeJson(STORAGE_KEY, next);
+  if (!sharedStorageAvailable) {
+    alert("Shared server DB is not connected. This report was NOT saved. Please logout, login again, and retry after the API server wakes up.");
+    return false;
+  }
+  const result = requestStatus("PUT", "/api/reports", { reports: next, mode });
+  if (!result.ok || !result.data?.ok) {
+    alert("Server save failed. This report was NOT saved. Please try again before leaving this page.");
+    refreshSharedStorageStatus();
+    return false;
+  }
   renderAllManagement();
+  return true;
+}
+function migrateLocalReportsToServer() {
+  if (!sharedStorageAvailable) return;
+  const localReports = readJson(STORAGE_KEY, []);
+  if (!Array.isArray(localReports) || !localReports.length) return;
+  const shouldMigrate = confirm(`This browser has ${localReports.length} local report(s) that may not exist on the shared server.\n\nUpload them to the shared server now?`);
+  if (!shouldMigrate) return;
+  const serverReports = reports();
+  const mergedById = new Map(serverReports.map((report) => [report.id, report]));
+  localReports.forEach((report) => {
+    if (report?.id) mergedById.set(report.id, report);
+  });
+  if (saveReports(Array.from(mergedById.values()))) {
+    localStorage.removeItem(STORAGE_KEY);
+    alert("Local reports were uploaded to the shared server.");
+  }
 }
 function escapeHtml(value) {
   return String(value ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
@@ -450,7 +476,8 @@ function saveReport(submit) {
     auditLogs: existing?.auditLogs || [],
   };
   record = addAudit(record, submit ? "submitted" : existing ? "updated" : "created", submit ? "Report submitted." : "Report saved as draft.");
-  saveReports(existing ? all.map((item) => (item.id === record.id ? record : item)) : [record, ...all]);
+  const saved = saveReports(existing ? all.map((item) => (item.id === record.id ? record : item)) : [record, ...all]);
+  if (!saved) return false;
   form.dataset.reportNo = record.reportNo;
   form.dataset.status = record.status;
   renderPreview(record);

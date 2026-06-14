@@ -16,3 +16,5 @@ services:
         sync: false
       - key: CORS_ORIGIN
         value: "https://dj7-sketch.github.io"
+      - key: REPORT_DATA_DIR
+        value: "/var/data"

@@ -5,8 +5,9 @@ const path = require("path");
 const HOST = process.env.HOST || "0.0.0.0";
 const PORT = Number(process.env.PORT || 4173);
 const ROOT = __dirname;
-const DATA_DIR = path.join(ROOT, "data");
+const DATA_DIR = process.env.REPORT_DATA_DIR || process.env.DATA_DIR || path.join(ROOT, "data");
 const DB_FILE = path.join(DATA_DIR, "reports.json");
+const BACKUP_FILE = path.join(DATA_DIR, "reports-backup.json");
 const sessions = new Map();
 const users = {
   "engineer-donghyeok": {
@@ -58,7 +59,10 @@ function readReports() {
 
 function writeReports(reports) {
   ensureDb();
-  fs.writeFileSync(DB_FILE, `${JSON.stringify(reports, null, 2)}\n`, "utf8");
+  if (fs.existsSync(DB_FILE)) fs.copyFileSync(DB_FILE, BACKUP_FILE);
+  const tempFile = `${DB_FILE}.tmp`;
+  fs.writeFileSync(tempFile, `${JSON.stringify(reports, null, 2)}\n`, "utf8");
+  fs.renameSync(tempFile, DB_FILE);
 }
 
 function sendJson(res, status, value) {
@@ -137,7 +141,7 @@ const server = http.createServer(async (req, res) => {
       return;
     }
     if (req.url === "/api/health") {
-      sendJson(res, 200, { ok: true, storage: "json-file" });
+      sendJson(res, 200, { ok: true, storage: "json-file", dataDir: DATA_DIR });
       return;
     }
     if (req.url === "/api/login" && req.method === "POST") {
