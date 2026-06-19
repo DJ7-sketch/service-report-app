@@ -558,17 +558,15 @@ function renderPreview(data) {
     </table>
     ${srText("Reason for Visit", data.reasonForVisit, "reason-box")}
     ${srText("Service Activity", data.serviceActivity, "activity-box")}
-    ${srTableSection("Working Time", ["Date", "Engineer", "Start", "End", "Hrs", "Mins", "Type"], (data.workLogs || []).map((log) => [log.date, log.engineer, log.start, log.end, log.hrs, log.mins, log.type]))}
+    <div class="sr-section-title">Working Time</div>
+    ${srTable(["Date", "Engineer", "Start", "End", "Hrs", "Mins", "Type"], (data.workLogs || []).map((log) => [log.date, log.engineer, log.start, log.end, log.hrs, log.mins, log.type]))}
     <div class="sr-total">Total: ${escapeHtml(totalWorkTime.textContent)}</div>
-    ${data.parts?.length
-      ? srTableSection("Parts Used", ["Part Number", "Description", "Qty", "Remarks"], data.parts.map((p) => [p.partNumber, p.description, p.qty, p.remarks]))
-      : '<section class="sr-section sr-compact-section"><div class="sr-section-title">Parts Used</div><div class="sr-empty">No parts used.</div></section>'}
-    <section class="sr-signature-section">
-      <div class="sr-signatures">
-        ${srSignature("Customer Signature", data.signatureCustomerName || data.customerName, data.customerSignatureDataUrl)}
-        ${srSignature("FSE Signature", data.fseName, data.fseSignatureDataUrl)}
-      </div>
-    </section>
+    <div class="sr-section-title">Parts Used</div>
+    ${data.parts?.length ? srTable(["Part Number", "Description", "Qty", "Remarks"], data.parts.map((p) => [p.partNumber, p.description, p.qty, p.remarks])) : '<div class="sr-empty">No parts used.</div>'}
+    <div class="sr-signatures">
+      ${srSignature("Customer Signature", data.signatureCustomerName || data.customerName, data.customerSignatureDataUrl)}
+      ${srSignature("FSE Signature", data.fseName, data.fseSignatureDataUrl)}
+    </div>
     <footer class="sr-footer">
       <strong>LivaNova Korea Ltd.</strong> &nbsp; +82 02. 2138. 0609 &nbsp; Sparkplus #206, Lotte World Wellbeing Center, Olympic-ro 240, Songpa-gu, Seoul
     </footer>
@@ -576,10 +574,7 @@ function renderPreview(data) {
   requestAnimationFrame(fitPreviewToWidth);
 }
 function srText(title, body, className) {
-  return `<section class="sr-section sr-text-section"><div class="sr-section-title">${escapeHtml(title)}</div><div class="sr-text ${className}">${escapeHtml(body || "-")}</div></section>`;
-}
-function srTableSection(title, headers, rows) {
-  return `<section class="sr-section sr-table-section"><div class="sr-section-title">${escapeHtml(title)}</div>${srTable(headers, rows)}</section>`;
+  return `<div class="sr-section-title">${escapeHtml(title)}</div><div class="sr-text ${className}">${escapeHtml(body || "-")}</div>`;
 }
 function srTable(headers, rows) {
   const body = rows.length ? rows.map((row) => `<tr>${row.map((cell) => `<td>${compact(cell)}</td>`).join("")}</tr>`).join("") : `<tr><td colspan="${headers.length}">-</td></tr>`;
