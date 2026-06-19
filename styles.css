@@ -289,9 +289,22 @@ canvas {
 .sr-header h2 { margin: 0 0 1mm; font-size: 15pt; font-weight: 900; }
 .sr-header img { width: 42mm; justify-self: end; }
 .meta-line { color: #333; font-weight: 700; }
+.sr-section {
+  break-inside: auto;
+  page-break-inside: auto;
+}
+.sr-compact-section, .sr-signature-section {
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
 .sr-info, .sr-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+.sr-info {
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
 .sr-table { break-inside: auto; page-break-inside: auto; }
 .sr-table thead { display: table-header-group; }
+.sr-table tfoot { display: table-footer-group; }
 .sr-table tr { break-inside: avoid; page-break-inside: avoid; }
 .sr-info th, .sr-info td, .sr-table th, .sr-table td {
   border: .45pt solid #333;
@@ -310,6 +323,8 @@ canvas {
   font-weight: 900;
   break-after: avoid;
   page-break-after: avoid;
+  break-inside: avoid;
+  page-break-inside: avoid;
 }
 .sr-text {
   white-space: pre-wrap;
@@ -393,17 +408,17 @@ canvas {
   .responsive-table td { border: 0; border-bottom: 1px solid var(--line); }
 }
 @media print {
-  @page { size: A4 portrait; margin: 0; }
+  @page { size: A4 portrait; margin: 25mm 11mm 14mm; }
   body { background: #fff; }
   .no-print, .report-list, .form-panel, .preview-panel > .panel-heading, .app-header, .notice { display: none !important; }
   .shell, .workspace, .preview-panel, .print-viewport, .print-frame { display: block; margin: 0; padding: 0; width: 100%; max-width: none; max-height: none; height: auto; overflow: visible; border: 0; box-shadow: none; }
   .print-sheet {
-    width: 210mm;
-    min-height: 297mm;
+    width: auto;
+    min-height: auto;
     height: auto;
     aspect-ratio: auto;
     margin: 0;
-    padding: 9mm 11mm;
+    padding: 0;
     border: 0;
     border-radius: 0;
     overflow: visible;
@@ -411,5 +426,51 @@ canvas {
     background-image: none;
     print-color-adjust: exact;
     -webkit-print-color-adjust: exact;
+  }
+  .sr-header {
+    position: fixed;
+    top: 6mm;
+    left: 11mm;
+    right: 11mm;
+    z-index: 2;
+    margin: 0;
+    padding-bottom: 2mm;
+    border-bottom: .7pt solid #333;
+    background: #fff;
+  }
+  .sr-header h2 { font-size: 13pt; }
+  .sr-header img { width: 36mm; }
+  .sr-footer {
+    position: fixed;
+    left: 11mm;
+    right: 11mm;
+    bottom: 5mm;
+    z-index: 2;
+    margin: 0;
+    padding-top: 1.5mm;
+    background: #fff;
+  }
+  .sr-section, .sr-info, .sr-total, .sr-empty, .sr-signature-section {
+    orphans: 3;
+    widows: 3;
+  }
+  .sr-text-section {
+    break-inside: auto;
+    page-break-inside: auto;
+  }
+  .sr-compact-section, .sr-signature-section, .sr-signatures figure {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+  .sr-table {
+    break-inside: auto;
+    page-break-inside: auto;
+  }
+  .sr-table thead {
+    display: table-header-group;
+  }
+  .sr-table tr {
+    break-inside: avoid;
+    page-break-inside: avoid;
   }
 }
