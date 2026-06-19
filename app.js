@@ -3,9 +3,6 @@ const DRAFT_KEY = "medical-service-report-draft-v3";
 const API_BASE = (window.SERVICE_REPORT_API_BASE || "").replace(/\/$/, "");
 let sharedStorageAvailable = false;
 let authToken = sessionStorage.getItem("serviceReportAuthToken") || "";
-let cachedReports = [];
-let networkBusyCount = 0;
-let previousSaveStateText = "";
 const users = {
   "engineer-donghyeok": { name: "Donghyeok Jung", role: "engineer" },
   "engineer-sangmin": { name: "Sangmin Lee", role: "engineer" },
@@ -166,65 +163,50 @@ function readJson(key, fallback) {
 function writeJson(key, value) {
   localStorage.setItem(key, JSON.stringify(value));
 }
-function setLoading(isLoading, label = "Loading...") {
-  if (isLoading && networkBusyCount === 0) previousSaveStateText = saveState?.textContent || "";
-  networkBusyCount = Math.max(0, networkBusyCount + (isLoading ? 1 : -1));
-  document.body.classList.toggle("is-loading", networkBusyCount > 0);
-  if (saveState && networkBusyCount > 0) saveState.textContent = label;
-  if (saveState && networkBusyCount === 0 && previousSaveStateText) {
-    saveState.textContent = previousSaveStateText;
-    previousSaveStateText = "";
+function requestJson(method, url, body) {
+  try {
+    const xhr = new XMLHttpRequest();
+    xhr.open(method, `${API_BASE}${url}`, false);
+    xhr.setRequestHeader("Content-Type", "application/json");
+    if (authToken) xhr.setRequestHeader("Authorization", `Bearer ${authToken}`);
+    xhr.send(body === undefined ? null : JSON.stringify(body));
+    if (xhr.status < 200 || xhr.status >= 300) throw new Error(xhr.statusText);
+    return xhr.responseText ? JSON.parse(xhr.responseText) : null;
+  } catch {
+    return null;
   }
 }
-async function requestStatus(method, url, body, loadingLabel = "Loading...") {
-  setLoading(true, loadingLabel);
+function requestStatus(method, url, body) {
   try {
-    const headers = { "Content-Type": "application/json" };
-    if (authToken) headers.Authorization = `Bearer ${authToken}`;
-    const response = await fetch(`${API_BASE}${url}`, {
-      method,
-      headers,
-      body: body === undefined ? undefined : JSON.stringify(body),
-      cache: "no-store",
-    });
-    const text = await response.text();
-    let data = null;
-    try {
-      data = text ? JSON.parse(text) : null;
-    } catch {
-      data = { error: text || response.statusText };
-    }
+    const xhr = new XMLHttpRequest();
+    xhr.open(method, `${API_BASE}${url}`, false);
+    xhr.setRequestHeader("Content-Type", "application/json");
+    if (authToken) xhr.setRequestHeader("Authorization", `Bearer ${authToken}`);
+    xhr.send(body === undefined ? null : JSON.stringify(body));
     return {
-      ok: response.ok,
-      status: response.status,
-      data,
+      ok: xhr.status >= 200 && xhr.status < 300,
+      status: xhr.status,
+      data: xhr.responseText ? JSON.parse(xhr.responseText) : null,
     };
   } catch (error) {
     return { ok: false, status: 0, data: { error: error.message || "Network error" } };
-  } finally {
-    setLoading(false);
   }
 }
-async function requestJson(method, url, body, loadingLabel) {
-  const result = await requestStatus(method, url, body, loadingLabel);
-  return result.ok ? result.data : null;
-}
-async function refreshSharedStorageStatus() {
-  sharedStorageAvailable = Boolean(await requestJson("GET", "/api/health", undefined, "Checking server..."));
+function refreshSharedStorageStatus() {
+  sharedStorageAvailable = Boolean(requestJson("GET", "/api/health"));
   const badge = document.getElementById("storageBadge");
   if (badge) {
     badge.textContent = sharedStorageAvailable ? "Shared server DB" : "Local browser DB";
     badge.className = sharedStorageAvailable ? "storage-badge shared" : "storage-badge local";
   }
 }
-async function login(userKey, password) {
-  loginMessage.textContent = "Connecting...";
-  const health = await requestStatus("GET", "/api/health", undefined, "Checking server...");
+function login(userKey, password) {
+  const health = requestStatus("GET", "/api/health");
   if (!health.ok) {
     loginMessage.textContent = "API server is not reachable. Wait 30 seconds and try again.";
     return false;
   }
-  const result = await requestStatus("POST", "/api/login", { userKey, password: password.trim() }, "Logging in...");
+  const result = requestStatus("POST", "/api/login", { userKey, password: password.trim() });
   if (!result.ok || !result.data?.token) {
     loginMessage.textContent = result.status === 401
       ? "Password is incorrect for the selected account."
@@ -238,17 +220,15 @@ async function login(userKey, password) {
   roleSelect.disabled = true;
   document.body.classList.remove("locked");
   document.getElementById("authGate").hidden = true;
-  await refreshSharedStorageStatus();
+  refreshSharedStorageStatus();
   syncUserToForm();
   roleSelect.dispatchEvent(new Event("change"));
-  await migrateLocalReportsToServer();
-  await renderAllManagement();
-  loginMessage.textContent = "";
+  migrateLocalReportsToServer();
+  renderAllManagement();
   return true;
 }
-async function logout() {
+function logout() {
   authToken = "";
-  cachedReports = [];
   sessionStorage.removeItem("serviceReportAuthToken");
   sessionStorage.removeItem("serviceReportUserKey");
   roleSelect.disabled = false;
@@ -257,51 +237,44 @@ async function logout() {
   document.body.classList.add("locked");
   document.getElementById("authGate").hidden = false;
   sharedStorageAvailable = false;
-  await refreshSharedStorageStatus();
+  refreshSharedStorageStatus();
 }
-function normalizeReports(source) {
+function reports() {
+  const source = sharedStorageAvailable ? requestJson("GET", "/api/reports") || [] : [];
   return source.map((report) => ({
     status: report.status || (report.completedAt ? "submitted" : "draft"),
     auditLogs: report.auditLogs || [],
     createdBy: report.createdBy || { name: report.fseName || "Minhyuk Lee", role: "engineer" },
-    reportNo: report.reportNo || generateReportNoFromList(report.reportDate || today(), source),
+    reportNo: report.reportNo || generateReportNo(report.reportDate || today()),
     ...report,
   }));
 }
-async function reports(forceRefresh = false) {
-  if (!sharedStorageAvailable) return [];
-  if (!forceRefresh && cachedReports.length) return cachedReports;
-  const source = await requestJson("GET", "/api/reports", undefined, "Loading reports...") || [];
-  cachedReports = normalizeReports(source);
-  return cachedReports;
-}
-async function saveReports(next, mode = "merge") {
+function saveReports(next, mode = "merge") {
   if (!sharedStorageAvailable) {
     alert("Shared server DB is not connected. This report was NOT saved. Please logout, login again, and retry after the API server wakes up.");
     return false;
   }
-  const result = await requestStatus("PUT", "/api/reports", { reports: next, mode }, "Saving...");
+  const result = requestStatus("PUT", "/api/reports", { reports: next, mode });
   if (!result.ok || !result.data?.ok) {
     alert("Server save failed. This report was NOT saved. Please try again before leaving this page.");
-    await refreshSharedStorageStatus();
+    refreshSharedStorageStatus();
     return false;
   }
-  cachedReports = normalizeReports(next);
-  await renderAllManagement();
+  renderAllManagement();
   return true;
 }
-async function migrateLocalReportsToServer() {
+function migrateLocalReportsToServer() {
   if (!sharedStorageAvailable) return;
   const localReports = readJson(STORAGE_KEY, []);
   if (!Array.isArray(localReports) || !localReports.length) return;
   const shouldMigrate = confirm(`This browser has ${localReports.length} local report(s) that may not exist on the shared server.\n\nUpload them to the shared server now?`);
   if (!shouldMigrate) return;
-  const serverReports = await reports();
+  const serverReports = reports();
   const mergedById = new Map(serverReports.map((report) => [report.id, report]));
   localReports.forEach((report) => {
     if (report?.id) mergedById.set(report.id, report);
   });
-  if (await saveReports(Array.from(mergedById.values()))) {
+  if (saveReports(Array.from(mergedById.values()))) {
     localStorage.removeItem(STORAGE_KEY);
     alert("Local reports were uploaded to the shared server.");
   }
@@ -317,14 +290,10 @@ function addAudit(report, action, message) {
   const log = { id: createId(), reportId: report.id, action, actorName: user.name, actorRole: user.role, message, createdAt: new Date().toISOString() };
   return { ...report, auditLogs: [...(report.auditLogs || []), log] };
 }
-function generateReportNoFromList(date, list) {
+function generateReportNo(date) {
   const day = (date || today()).replaceAll("-", "");
-  const sameDay = list.filter((item) => (item.reportNo || "").startsWith(`SR-${day}`)).length + 1;
+  const sameDay = reports().filter((item) => (item.reportNo || "").startsWith(`SR-${day}`)).length + 1;
   return `SR-${day}-${String(sameDay).padStart(3, "0")}`;
-}
-async function generateReportNo(date) {
-  const all = cachedReports.length ? cachedReports : await reports();
-  return generateReportNoFromList(date, all);
 }
 
 function checkedText(items) {
@@ -486,20 +455,20 @@ function newReport(skipConfirm = false) {
   updateAll();
 }
 
-async function saveReport(submit) {
+function saveReport(submit) {
   updateAll();
   const data = formData();
   const errors = submit ? validate(data) : [];
   showErrors(errors);
   if (errors.length) return false;
-  const all = await reports();
+  const all = reports();
   const existing = all.find((item) => item.id === data.id);
   const now = new Date().toISOString();
   let record = {
     ...existing,
     ...data,
     id: existing?.id || createId(),
-    reportNo: existing?.reportNo || await generateReportNo(data.reportDate || today()),
+    reportNo: existing?.reportNo || generateReportNo(data.reportDate || today()),
     status: submit ? "submitted" : existing?.status || "draft",
     createdBy: existing?.createdBy || currentUser(),
     createdAt: existing?.createdAt || now,
@@ -509,7 +478,7 @@ async function saveReport(submit) {
     auditLogs: existing?.auditLogs || [],
   };
   record = addAudit(record, submit ? "submitted" : existing ? "updated" : "created", submit ? "Report submitted." : "Report saved as draft.");
-  const saved = await saveReports(existing ? all.map((item) => (item.id === record.id ? record : item)) : [record, ...all]);
+  const saved = saveReports(existing ? all.map((item) => (item.id === record.id ? record : item)) : [record, ...all]);
   if (!saved) return false;
   form.dataset.reportNo = record.reportNo;
   form.dataset.status = record.status;
@@ -589,17 +558,15 @@ function renderPreview(data) {
     </table>
     ${srText("Reason for Visit", data.reasonForVisit, "reason-box")}
     ${srText("Service Activity", data.serviceActivity, "activity-box")}
-    ${srTableSection("Working Time", ["Date", "Engineer", "Start", "End", "Hrs", "Mins", "Type"], (data.workLogs || []).map((log) => [log.date, log.engineer, log.start, log.end, log.hrs, log.mins, log.type]))}
+    <div class="sr-section-title">Working Time</div>
+    ${srTable(["Date", "Engineer", "Start", "End", "Hrs", "Mins", "Type"], (data.workLogs || []).map((log) => [log.date, log.engineer, log.start, log.end, log.hrs, log.mins, log.type]))}
     <div class="sr-total">Total: ${escapeHtml(totalWorkTime.textContent)}</div>
-    ${data.parts?.length
-      ? srTableSection("Parts Used", ["Part Number", "Description", "Qty", "Remarks"], data.parts.map((p) => [p.partNumber, p.description, p.qty, p.remarks]))
-      : '<section class="sr-section sr-compact-section"><div class="sr-section-title">Parts Used</div><div class="sr-empty">No parts used.</div></section>'}
-    <section class="sr-signature-section">
-      <div class="sr-signatures">
-        ${srSignature("Customer Signature", data.signatureCustomerName || data.customerName, data.customerSignatureDataUrl)}
-        ${srSignature("FSE Signature", data.fseName, data.fseSignatureDataUrl)}
-      </div>
-    </section>
+    <div class="sr-section-title">Parts Used</div>
+    ${data.parts?.length ? srTable(["Part Number", "Description", "Qty", "Remarks"], data.parts.map((p) => [p.partNumber, p.description, p.qty, p.remarks])) : '<div class="sr-empty">No parts used.</div>'}
+    <div class="sr-signatures">
+      ${srSignature("Customer Signature", data.signatureCustomerName || data.customerName, data.customerSignatureDataUrl)}
+      ${srSignature("FSE Signature", data.fseName, data.fseSignatureDataUrl)}
+    </div>
     <footer class="sr-footer">
       <strong>LivaNova Korea Ltd.</strong> &nbsp; +82 02. 2138. 0609 &nbsp; Sparkplus #206, Lotte World Wellbeing Center, Olympic-ro 240, Songpa-gu, Seoul
     </footer>
@@ -607,10 +574,7 @@ function renderPreview(data) {
   requestAnimationFrame(fitPreviewToWidth);
 }
 function srText(title, body, className) {
-  return `<section class="sr-section sr-text-section"><div class="sr-section-title">${escapeHtml(title)}</div><div class="sr-text ${className}">${escapeHtml(body || "-")}</div></section>`;
-}
-function srTableSection(title, headers, rows) {
-  return `<section class="sr-section sr-table-section"><div class="sr-section-title">${escapeHtml(title)}</div>${srTable(headers, rows)}</section>`;
+  return `<div class="sr-section-title">${escapeHtml(title)}</div><div class="sr-text ${className}">${escapeHtml(body || "-")}</div>`;
 }
 function srTable(headers, rows) {
   const body = rows.length ? rows.map((row) => `<tr>${row.map((cell) => `<td>${compact(cell)}</td>`).join("")}</tr>`).join("") : `<tr><td colspan="${headers.length}">-</td></tr>`;
@@ -642,12 +606,12 @@ function renderCards(container, rows, includeDeleted = false) {
     </td>
   </tr>`).join("")}</tbody></table></div>`;
 }
-function filteredReports(all) {
+function filteredReports() {
   const q = document.getElementById("searchInput")?.value.toLowerCase().trim() || "";
   const status = document.getElementById("statusFilter")?.value || "active";
   const dateFilter = document.getElementById("dateFilter")?.value || "all";
   const sort = document.getElementById("sortSelect")?.value || "newest";
-  let list = [...all];
+  let list = reports();
   if (status === "active") list = list.filter((r) => r.status !== "deleted");
   else if (status !== "all") list = list.filter((r) => r.status === status);
   if (q) list = list.filter((r) => [r.reportNo, r.hospital, r.customerName, r.deviceModel, r.serialNo, r.fseName].join(" ").toLowerCase().includes(q));
@@ -664,8 +628,8 @@ function filteredReports(all) {
     return new Date(b.createdAt || 0) - new Date(a.createdAt || 0);
   });
 }
-async function renderAllManagement(forceRefresh = false) {
-  const all = await reports(forceRefresh);
+function renderAllManagement() {
+  const all = reports();
   const savedReports = all.filter((r) => r.status !== "deleted");
   const savedPages = Math.max(1, Math.ceil(savedReports.length / SAVED_REPORTS_PAGE_SIZE));
   savedReportsPage = Math.min(Math.max(1, savedReportsPage), savedPages);
@@ -677,7 +641,7 @@ async function renderAllManagement(forceRefresh = false) {
     reportList.insertAdjacentHTML("beforeend", `<div class="list-pager"><button data-saved-page="${savedReportsPage - 1}" ${savedReportsPage <= 1 ? "disabled" : ""}>Prev</button><span>${savedReportsPage} / ${savedPages}</span><button data-saved-page="${savedReportsPage + 1}" ${savedReportsPage >= savedPages ? "disabled" : ""}>Next</button></div>`);
   }
   renderCards(document.getElementById("engineerReports"), all.filter((r) => r.createdBy?.name === currentUser().name || r.fseName === currentUser().name));
-  renderCards(document.getElementById("adminReports"), filteredReports(all));
+  renderCards(document.getElementById("adminReports"), filteredReports());
   renderCards(document.getElementById("trashReports"), all.filter((r) => r.status === "deleted"), true);
   const count = (s) => all.filter((r) => r.status === s).length;
   document.getElementById("dashboardCards").innerHTML = [
@@ -687,40 +651,40 @@ async function renderAllManagement(forceRefresh = false) {
   renderCards(document.getElementById("recentReports"), all.filter((r) => r.status !== "deleted").slice(0, 5));
 }
 
-async function softDelete(id) {
+function softDelete(id) {
   const reason = prompt("Delete this service report? Deleted reports can be restored in Admin Trash. Enter delete reason:");
   if (reason === null) return;
-  const all = await reports();
-  await saveReports(all.map((r) => {
+  const all = reports();
+  saveReports(all.map((r) => {
     if (r.id !== id) return r;
     return addAudit({ ...r, status: "deleted", deletedAt: new Date().toISOString(), deletedBy: currentUser().name, deleteReason: reason || "No reason" }, "deleted", `Deleted: ${reason || "No reason"}`);
   }));
 }
-async function restoreReport(id) {
-  await saveReports((await reports()).map((r) => r.id === id ? addAudit({ ...r, status: "submitted", deletedAt: "", deletedBy: "", deleteReason: "" }, "restored", "Report restored.") : r));
+function restoreReport(id) {
+  saveReports(reports().map((r) => r.id === id ? addAudit({ ...r, status: "submitted", deletedAt: "", deletedBy: "", deleteReason: "" }, "restored", "Report restored.") : r));
 }
-async function permanentDelete(id) {
+function permanentDelete(id) {
   if (!confirm("Permanent delete cannot be restored. Really delete forever?")) return;
-  await saveReports((await reports()).filter((r) => r.id !== id), "replace");
+  saveReports(reports().filter((r) => r.id !== id), "replace");
 }
-async function changeStatus(id, status) {
-  await saveReports((await reports()).map((r) => r.id === id ? addAudit({ ...r, status, updatedAt: new Date().toISOString() }, "status_changed", `Status changed to ${status}.`) : r));
+function changeStatus(id, status) {
+  saveReports(reports().map((r) => r.id === id ? addAudit({ ...r, status, updatedAt: new Date().toISOString() }, "status_changed", `Status changed to ${status}.`) : r));
 }
-async function handleReportAction(action, id) {
-  const report = (await reports()).find((r) => r.id === id);
+function handleReportAction(action, id) {
+  const report = reports().find((r) => r.id === id);
   if (!report) return;
   if (action === "view" || action === "edit") fillForm(report);
   if (action === "pdf") {
     fillForm(report);
     printReport(false);
   }
-  if (action === "delete") await softDelete(id);
-  if (action === "restore") await restoreReport(id);
-  if (action === "permanent") await permanentDelete(id);
+  if (action === "delete") softDelete(id);
+  if (action === "restore") restoreReport(id);
+  if (action === "permanent") permanentDelete(id);
 }
-async function showView(id) {
+function showView(id) {
   document.querySelectorAll(".view").forEach((view) => view.classList.toggle("hidden", view.id !== id));
-  await renderAllManagement();
+  renderAllManagement();
 }
 function printReport(validateFirst = true) {
   updateAll();
@@ -742,15 +706,15 @@ form.addEventListener("input", markDirty);
 window.addEventListener("resize", fitPreviewToWidth);
 workLogRows.addEventListener("input", markDirty);
 partRows.addEventListener("input", markDirty);
-form.addEventListener("submit", async (event) => {
+form.addEventListener("submit", (event) => {
   event.preventDefault();
-  await saveReport(true);
+  saveReport(true);
 });
 document.getElementById("newReportBtn").addEventListener("click", () => newReport(false));
-document.getElementById("draftBtn").addEventListener("click", async () => await saveReport(false));
+document.getElementById("draftBtn").addEventListener("click", () => saveReport(false));
 document.getElementById("loadDraftBtn").addEventListener("click", () => fillForm(readJson(DRAFT_KEY, formData())));
 document.getElementById("printBtn").addEventListener("click", () => printReport(true));
-document.getElementById("logoutBtn").addEventListener("click", async () => await logout());
+document.getElementById("logoutBtn").addEventListener("click", logout);
 document.getElementById("addWorkLogBtn").addEventListener("click", () => {
   workLogRows.insertAdjacentHTML("beforeend", workLogRow(defaultWorkLog()));
   markDirty();
@@ -773,27 +737,27 @@ partRows.addEventListener("click", (event) => {
 document.querySelectorAll("[data-clear-signature]").forEach((button) => {
   button.addEventListener("click", () => button.dataset.clearSignature === "customer" ? customerPad.clear() : fsePad.clear());
 });
-document.body.addEventListener("click", async (event) => {
+document.body.addEventListener("click", (event) => {
   const view = event.target.dataset.view;
-  if (view) await showView(view);
+  if (view) showView(view);
   const action = event.target.dataset.action;
-  if (action) await handleReportAction(action, event.target.dataset.id);
+  if (action) handleReportAction(action, event.target.dataset.id);
   const load = event.target.dataset.load;
-  if (load) fillForm((await reports()).find((r) => r.id === load));
+  if (load) fillForm(reports().find((r) => r.id === load));
   const listDelete = event.target.dataset.listDelete;
-  if (listDelete) await softDelete(listDelete);
+  if (listDelete) softDelete(listDelete);
   const savedPage = event.target.dataset.savedPage;
   if (savedPage) {
     savedReportsPage = Number(savedPage);
-    await renderAllManagement();
+    renderAllManagement();
   }
 });
-["searchInput", "statusFilter", "dateFilter", "sortSelect"].forEach((id) => document.getElementById(id)?.addEventListener("input", () => renderAllManagement()));
-roleSelect.addEventListener("change", async () => {
+["searchInput", "statusFilter", "dateFilter", "sortSelect"].forEach((id) => document.getElementById(id)?.addEventListener("input", renderAllManagement));
+roleSelect.addEventListener("change", () => {
   const isAdmin = roleSelect.value === "admin";
   document.querySelectorAll("[data-admin-only]").forEach((el) => el.hidden = !isAdmin);
   syncUserToForm();
-  if (!isAdmin && !["createView", "engineerReportsView"].includes(document.querySelector(".view:not(.hidden)")?.id)) await showView("createView");
+  if (!isAdmin && !["createView", "engineerReportsView"].includes(document.querySelector(".view:not(.hidden)")?.id)) showView("createView");
 });
 
 function syncUserToForm() {
@@ -803,33 +767,29 @@ function syncUserToForm() {
   }
 }
 
-loginForm.addEventListener("submit", async (event) => {
+loginForm.addEventListener("submit", (event) => {
   event.preventDefault();
   loginMessage.textContent = "";
-  await login(loginUser.value, loginPassword.value);
+  login(loginUser.value, loginPassword.value);
 });
 
 showPassword.addEventListener("change", () => {
   loginPassword.type = showPassword.checked ? "text" : "password";
 });
 
-async function init() {
-  newReport(true);
-  const draft = readJson(DRAFT_KEY, null);
-  if (draft) fillForm(draft);
-  await refreshSharedStorageStatus();
-  const savedUserKey = sessionStorage.getItem("serviceReportUserKey");
-  if (authToken && savedUserKey) {
-    roleSelect.value = savedUserKey;
-    roleSelect.disabled = true;
-    document.body.classList.remove("locked");
-    document.getElementById("authGate").hidden = true;
-    roleSelect.dispatchEvent(new Event("change"));
-    await renderAllManagement();
-  } else {
-    roleSelect.dispatchEvent(new Event("change"));
-  }
-  requestAnimationFrame(fitPreviewToWidth);
+newReport(true);
+const draft = readJson(DRAFT_KEY, null);
+if (draft) fillForm(draft);
+refreshSharedStorageStatus();
+const savedUserKey = sessionStorage.getItem("serviceReportUserKey");
+if (authToken && savedUserKey) {
+  roleSelect.value = savedUserKey;
+  roleSelect.disabled = true;
+  document.body.classList.remove("locked");
+  document.getElementById("authGate").hidden = true;
+  roleSelect.dispatchEvent(new Event("change"));
+  renderAllManagement();
+} else {
+  roleSelect.dispatchEvent(new Event("change"));
 }
-
-init();
+requestAnimationFrame(fitPreviewToWidth);
