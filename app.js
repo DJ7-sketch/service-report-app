@@ -667,20 +667,45 @@ function renderCards(container, rows, includeDeleted = false) {
     </td>
   </tr>`).join("")}</tbody></table></div>`;
 }
+function reportSearchValue(report, field) {
+  if (field === "updatedAt") return String(report.updatedAt || "").slice(0, 10);
+  return String(report[field] || "");
+}
+function reportMatchesSearch(report, field, query) {
+  if (!query) return true;
+  if (field !== "all") return reportSearchValue(report, field).toLowerCase().includes(query);
+  return [report.reportNo, report.reportDate, report.hospital, report.customerName, report.deviceModel, report.serialNo, report.fseName, report.status, String(report.updatedAt || "").slice(0, 10)]
+    .join(" ")
+    .toLowerCase()
+    .includes(query);
+}
+function reportDateValue(report) {
+  return report.reportDate || String(report.createdAt || "").slice(0, 10);
+}
 function filteredReports(all) {
   const q = document.getElementById("searchInput")?.value.toLowerCase().trim() || "";
+  const field = document.getElementById("searchField")?.value || "all";
   const status = document.getElementById("statusFilter")?.value || "active";
   const dateFilter = document.getElementById("dateFilter")?.value || "all";
+  const dateFrom = document.getElementById("dateFrom")?.value || "";
+  const dateTo = document.getElementById("dateTo")?.value || "";
   const sort = document.getElementById("sortSelect")?.value || "newest";
   let list = [...all];
   if (status === "active") list = list.filter((r) => r.status !== "deleted");
   else if (status !== "all") list = list.filter((r) => r.status === status);
-  if (q) list = list.filter((r) => [r.reportNo, r.hospital, r.customerName, r.deviceModel, r.serialNo, r.fseName].join(" ").toLowerCase().includes(q));
-  if (dateFilter !== "all") {
+  if (q) list = list.filter((r) => reportMatchesSearch(r, field, q));
+  if (dateFilter === "custom") {
+    list = list.filter((r) => {
+      const date = reportDateValue(r);
+      if (dateFrom && date < dateFrom) return false;
+      if (dateTo && date > dateTo) return false;
+      return true;
+    });
+  } else if (dateFilter !== "all") {
     const days = dateFilter === "today" ? 0 : Number(dateFilter);
     const cutoff = new Date();
     cutoff.setDate(cutoff.getDate() - days);
-    list = list.filter((r) => new Date(r.createdAt || r.reportDate) >= cutoff);
+    list = list.filter((r) => new Date(reportDateValue(r)) >= cutoff);
   }
   return list.sort((a, b) => {
     if (sort === "oldest") return new Date(a.createdAt) - new Date(b.createdAt);
@@ -688,6 +713,11 @@ function filteredReports(all) {
     if (sort === "updated") return new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0);
     return new Date(b.createdAt || 0) - new Date(a.createdAt || 0);
   });
+}
+function syncDateRangeFilters() {
+  const isCustom = document.getElementById("dateFilter")?.value === "custom";
+  document.querySelector(".filters")?.classList.toggle("custom-date", isCustom);
+  document.querySelectorAll(".date-range-input").forEach((input) => input.classList.toggle("hidden", !isCustom));
 }
 async function renderAllManagement(forceRefresh = false) {
   const all = await reports(forceRefresh);
@@ -813,7 +843,12 @@ document.body.addEventListener("click", async (event) => {
     await renderAllManagement();
   }
 });
-["searchInput", "statusFilter", "dateFilter", "sortSelect"].forEach((id) => document.getElementById(id)?.addEventListener("input", () => renderAllManagement()));
+["searchField", "searchInput", "statusFilter", "dateFilter", "dateFrom", "dateTo", "sortSelect"].forEach((id) => {
+  document.getElementById(id)?.addEventListener("input", () => {
+    syncDateRangeFilters();
+    renderAllManagement();
+  });
+});
 roleSelect.addEventListener("change", async () => {
   const isAdmin = roleSelect.value === "admin";
   document.querySelectorAll("[data-admin-only]").forEach((el) => el.hidden = !isAdmin);
@@ -840,6 +875,7 @@ showPassword.addEventListener("change", () => {
 
 async function init() {
   newReport(true);
+  syncDateRangeFilters();
   const draft = readJson(DRAFT_KEY, null);
   if (draft) fillForm(draft);
   const savedUserKey = sessionStorage.getItem("serviceReportUserKey");

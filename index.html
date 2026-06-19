@@ -232,9 +232,23 @@
           <div class="wide-panel">
             <div class="panel-heading"><h2>All Reports</h2><button type="button" class="primary" data-view="createView">Create</button></div>
             <div class="filters">
-              <input id="searchInput" placeholder="Search hospital, customer, device, serial, FSE, report no." />
+              <select id="searchField">
+                <option value="all">All columns</option>
+                <option value="reportNo">Report No.</option>
+                <option value="reportDate">Date</option>
+                <option value="hospital">Hospital</option>
+                <option value="customerName">Customer</option>
+                <option value="deviceModel">Device</option>
+                <option value="serialNo">Serial</option>
+                <option value="fseName">FSE</option>
+                <option value="status">Status</option>
+                <option value="updatedAt">Updated</option>
+              </select>
+              <input id="searchInput" placeholder="Enter search text" />
               <select id="statusFilter"><option value="active">Active</option><option value="all">All</option><option value="draft">draft</option><option value="submitted">submitted</option><option value="reviewed">reviewed</option><option value="completed">completed</option></select>
-              <select id="dateFilter"><option value="all">All dates</option><option value="today">Today</option><option value="7">Last 7 days</option><option value="30">Last 30 days</option></select>
+              <select id="dateFilter"><option value="all">All dates</option><option value="today">Today</option><option value="7">Last 7 days</option><option value="30">Last 30 days</option><option value="custom">Custom range</option></select>
+              <input id="dateFrom" class="date-range-input hidden" type="date" aria-label="Start date" />
+              <input id="dateTo" class="date-range-input hidden" type="date" aria-label="End date" />
               <select id="sortSelect"><option value="newest">Newest</option><option value="oldest">Oldest</option><option value="hospital">Hospital A-Z</option><option value="updated">Recently updated</option></select>
             </div>
             <div id="adminReports"></div>
