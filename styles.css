@@ -22,6 +22,47 @@ body {
 body.locked {
   overflow: hidden;
 }
+body.is-loading,
+body.is-loading button,
+body.is-loading input,
+body.is-loading textarea,
+body.is-loading select {
+  cursor: progress;
+}
+.loading-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: grid;
+  place-items: center;
+  background: rgba(237, 241, 245, .48);
+  pointer-events: auto;
+}
+.loading-overlay[hidden] {
+  display: none;
+}
+.loading-box {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: var(--shadow);
+}
+.loading-spinner {
+  width: 18px;
+  height: 18px;
+  border: 3px solid #d7e0e8;
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin .8s linear infinite;
+}
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
 button, input, textarea, select { font: inherit; }
 button {
   min-height: 38px;
@@ -289,9 +330,22 @@ canvas {
 .sr-header h2 { margin: 0 0 1mm; font-size: 15pt; font-weight: 900; }
 .sr-header img { width: 42mm; justify-self: end; }
 .meta-line { color: #333; font-weight: 700; }
+.sr-section {
+  break-inside: auto;
+  page-break-inside: auto;
+}
+.sr-compact-section, .sr-signature-section {
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
 .sr-info, .sr-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+.sr-info {
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
 .sr-table { break-inside: auto; page-break-inside: auto; }
 .sr-table thead { display: table-header-group; }
+.sr-table tfoot { display: table-footer-group; }
 .sr-table tr { break-inside: avoid; page-break-inside: avoid; }
 .sr-info th, .sr-info td, .sr-table th, .sr-table td {
   border: .45pt solid #333;
@@ -310,6 +364,8 @@ canvas {
   font-weight: 900;
   break-after: avoid;
   page-break-after: avoid;
+  break-inside: avoid;
+  page-break-inside: avoid;
 }
 .sr-text {
   white-space: pre-wrap;
@@ -411,5 +467,28 @@ canvas {
     background-image: none;
     print-color-adjust: exact;
     -webkit-print-color-adjust: exact;
+  }
+  .sr-section, .sr-info, .sr-total, .sr-empty, .sr-signature-section {
+    orphans: 3;
+    widows: 3;
+  }
+  .sr-text-section {
+    break-inside: auto;
+    page-break-inside: auto;
+  }
+  .sr-compact-section, .sr-signature-section, .sr-signatures figure {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+  .sr-table {
+    break-inside: auto;
+    page-break-inside: auto;
+  }
+  .sr-table thead {
+    display: table-header-group;
+  }
+  .sr-table tr {
+    break-inside: avoid;
+    page-break-inside: avoid;
   }
 }
