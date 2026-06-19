@@ -557,10 +557,10 @@ function renderPreview(data) {
     ${srText("Reason for Visit", data.reasonForVisit, "reason-box")}
     ${srText("Service Activity", data.serviceActivity, "activity-box")}
     <div class="sr-section-title">Working Time</div>
-    ${srTable(["Date", "Engineer", "Start", "End", "Hrs", "Mins", "Type"], (data.workLogs || []).slice(0, 5).map((log) => [log.date, log.engineer, log.start, log.end, log.hrs, log.mins, log.type]))}
+    ${srTable(["Date", "Engineer", "Start", "End", "Hrs", "Mins", "Type"], (data.workLogs || []).map((log) => [log.date, log.engineer, log.start, log.end, log.hrs, log.mins, log.type]))}
     <div class="sr-total">Total: ${escapeHtml(totalWorkTime.textContent)}</div>
     <div class="sr-section-title">Parts Used</div>
-    ${data.parts?.length ? srTable(["Part Number", "Description", "Qty", "Remarks"], data.parts.slice(0, 4).map((p) => [p.partNumber, p.description, p.qty, p.remarks])) : '<div class="sr-empty">No parts used.</div>'}
+    ${data.parts?.length ? srTable(["Part Number", "Description", "Qty", "Remarks"], data.parts.map((p) => [p.partNumber, p.description, p.qty, p.remarks])) : '<div class="sr-empty">No parts used.</div>'}
     <div class="sr-signatures">
       ${srSignature("Customer Signature", data.signatureCustomerName || data.customerName, data.customerSignatureDataUrl)}
       ${srSignature("FSE Signature", data.fseName, data.fseSignatureDataUrl)}

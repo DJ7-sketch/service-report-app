@@ -254,13 +254,14 @@ canvas {
 .action-cell { min-width: 250px; }
 .action-cell button { min-height: 30px; margin: 2px; padding: 0 8px; font-size: .8rem; }
 
-/* A4 single-page report */
+/* A4 report */
 .print-sheet {
   width: 210mm;
   max-width: none;
-  height: 297mm;
+  min-height: 297mm;
+  height: auto;
   margin: 0;
-  overflow: hidden;
+  overflow: visible;
   padding: 10mm 12mm;
   background: #fff;
   border: 1px solid var(--line);
@@ -270,6 +271,13 @@ canvas {
   line-height: 1.25;
   transform: scale(var(--preview-scale, 1));
   transform-origin: top left;
+  background-image: repeating-linear-gradient(
+    to bottom,
+    #fff 0,
+    #fff 296.4mm,
+    #e5e7eb 296.4mm,
+    #e5e7eb 297mm
+  );
 }
 .sr-header {
   display: grid;
@@ -282,6 +290,9 @@ canvas {
 .sr-header img { width: 42mm; justify-self: end; }
 .meta-line { color: #333; font-weight: 700; }
 .sr-info, .sr-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+.sr-table { break-inside: auto; page-break-inside: auto; }
+.sr-table thead { display: table-header-group; }
+.sr-table tr { break-inside: avoid; page-break-inside: avoid; }
 .sr-info th, .sr-info td, .sr-table th, .sr-table td {
   border: .45pt solid #333;
   padding: 1.15mm 1.4mm;
@@ -297,6 +308,8 @@ canvas {
   border-bottom: 0;
   background: #f2f2f2;
   font-weight: 900;
+  break-after: avoid;
+  page-break-after: avoid;
 }
 .sr-text {
   white-space: pre-wrap;
@@ -309,6 +322,7 @@ canvas {
 .activity-box { height: 35mm; }
 .sr-total { text-align: right; border: .45pt solid #333; border-top: 0; padding: 1mm 1.4mm; font-weight: 900; }
 .sr-empty { border: .45pt solid #333; padding: 2mm; }
+.sr-total, .sr-empty, .sr-signatures, .sr-footer { break-inside: avoid; page-break-inside: avoid; }
 .sr-signatures {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -383,14 +397,16 @@ canvas {
   .shell, .workspace, .preview-panel, .print-viewport, .print-frame { display: block; margin: 0; padding: 0; width: 100%; max-width: none; max-height: none; height: auto; overflow: visible; border: 0; box-shadow: none; }
   .print-sheet {
     width: 210mm;
-    height: 297mm;
+    min-height: 297mm;
+    height: auto;
     aspect-ratio: auto;
     margin: 0;
     padding: 9mm 11mm;
     border: 0;
     border-radius: 0;
-    overflow: hidden;
+    overflow: visible;
     transform: none;
+    background-image: none;
     print-color-adjust: exact;
     -webkit-print-color-adjust: exact;
   }

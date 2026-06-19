@@ -1,34 +1,47 @@
-# Data persistence setup
+# Data persistence setup: Render API + Supabase Postgres
 
 The service report app must use the shared API server for all report saves.
 Do not rely on browser local storage for production records.
 
-## Why reports can disappear
+## Production URLs
 
-Render Web Services use an ephemeral filesystem by default. If reports are saved
-to `data/reports.json` inside the deployed app, those records can be lost after a
-redeploy or restart.
+- Frontend: `https://dj7-sketch.github.io/service-report-app/`
+- API: `https://service-report-api.onrender.com`
+- Repository: `https://github.com/DJ7-sketch/service-report-app`
 
-## Required Render setting
+## Required Render environment variables
 
-Add a Render Persistent Disk to the `service-report-api` Web Service.
-
-- Mount path: `/var/data`
-- Environment variable: `REPORT_DATA_DIR=/var/data`
-
-After this is configured, the API stores reports at:
+Set these on the Render Web Service named `service-report-api`:
 
 ```text
-/var/data/reports.json
+DATABASE_URL=<Supabase Postgres connection string>
+CORS_ORIGIN=https://dj7-sketch.github.io
+PASSWORD_DONGHYEOK=<real password>
+PASSWORD_SANGMIN=<real password>
+PASSWORD_MINHYUK=<real password>
+PASSWORD_ADMIN=<real password>
 ```
 
-The app also keeps one previous-copy backup at:
+`server.js` uses `DATABASE_URL` to connect through the `pg` package. On startup, it creates this table if needed:
 
-```text
-/var/data/reports-backup.json
+```sql
+create table if not exists service_reports (
+  id text primary key,
+  report jsonb not null,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
 ```
 
-## Important
+## Supabase connection string
 
-If `Shared server DB` is not connected, the app now blocks report saving instead
-of silently saving only to one browser/device.
+Use the Supabase Project Settings database connection string. A pooled connection string is usually better for hosted services.
+
+If the password contains special characters, use the exact URL-encoded connection string Supabase provides.
+
+## Fallback behavior
+
+If `DATABASE_URL` is missing, the API falls back to local JSON storage at `data/reports.json`.
+That fallback is useful for local testing only. Render's filesystem is ephemeral, so production must use Supabase Postgres.
+
+If the frontend cannot reach the API, report saving is blocked instead of silently saving production records to one browser.

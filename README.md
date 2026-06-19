@@ -4,11 +4,21 @@ Responsive web app for creating, managing, sharing, and printing LivaNova-style 
 
 ## Run
 
-For single-user local testing, open `index.html` in a browser.
+Production frontend:
 
-For GitHub Pages deployment, see:
+`https://dj7-sketch.github.io/service-report-app/`
 
-`GITHUB_PAGES_SETUP.md`
+Production API:
+
+`https://service-report-api.onrender.com`
+
+Repository:
+
+`https://github.com/DJ7-sketch/service-report-app`
+
+For local frontend testing, open `index.html` in a browser. It reads the API URL from `config.js`.
+
+For GitHub Pages deployment, see `GITHUB_PAGES_SETUP.md`.
 
 For multiple employees, run the shared server:
 
@@ -41,9 +51,9 @@ In Codex preview, use:
 - Engineer report list
 - Admin dashboard, all-report list, search/filter/sort, soft delete, restore, permanent delete
 - Audit logs stored in each report record
-- Shared JSON-file database when served by `server.js`
-- GitHub Pages frontend can connect to a deployed API by setting `config.js`
-- localStorage fallback when opened without the server
+- GitHub Pages frontend connected to the Render API through `config.js`
+- Render API connected to Supabase Postgres through `DATABASE_URL`
+- JSON-file storage is only a local fallback when `DATABASE_URL` is not set
 
 ## PDF/Print
 
@@ -51,13 +61,19 @@ Use the `PDF/Print` button. The print layout is designed as one A4 portrait page
 
 ## Storage
 
-When using `server.js`, reports are stored in:
+In production, reports are stored in Supabase Postgres. Render must provide:
+
+`DATABASE_URL=<Supabase pooled or direct Postgres connection string>`
+
+When `DATABASE_URL` is set, `server.js` automatically creates and uses the `service_reports` table.
+
+If `DATABASE_URL` is not set, the server falls back to local JSON storage:
 
 `data/reports.json`
 
 Default login passwords are documented in `GITHUB_PAGES_SETUP.md`. Change them with environment variables before real use.
 
-Draft auto-save remains browser-local. This file-based server is suitable for small internal MVP use. For production, replace the JSON file repository with Supabase, Firebase, PostgreSQL, or an internal API, and add real authentication.
+Draft auto-save remains browser-local. Production records should be saved through the Render API to Supabase Postgres.
 
 ## Windows Firewall
 
