@@ -316,10 +316,12 @@ canvas {
   word-break: break-word;
   border: .45pt solid #333;
   padding: 1.4mm;
-  overflow: hidden;
+  overflow: visible;
+  break-inside: auto;
+  page-break-inside: auto;
 }
-.reason-box { height: 19mm; }
-.activity-box { height: 35mm; }
+.reason-box { min-height: 19mm; }
+.activity-box { min-height: 35mm; }
 .sr-total { text-align: right; border: .45pt solid #333; border-top: 0; padding: 1mm 1.4mm; font-weight: 900; }
 .sr-empty { border: .45pt solid #333; padding: 2mm; }
 .sr-total, .sr-empty, .sr-signatures, .sr-footer { break-inside: avoid; page-break-inside: avoid; }
