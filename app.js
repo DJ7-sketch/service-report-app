@@ -355,7 +355,7 @@ function workLogRow(log) {
     <td><input type="time" data-field="end" value="${compact(log.end, "")}" /></td>
     <td><input data-field="hrs" value="${compact(log.hrs || 0)}" readonly /></td>
     <td><input data-field="mins" value="${compact(log.mins || 0)}" readonly /></td>
-    <td><select data-field="type">${["Trav", "Working", "Trav Back", "Other"].map((type) => `<option value="${type}" ${type === log.type ? "selected" : ""}>${type}</option>`).join("")}</select></td>
+    <td><select data-field="type">${["Trav", "Working", "Break", "Trav Back", "Other"].map((type) => `<option value="${type}" ${type === log.type ? "selected" : ""}>${type}</option>`).join("")}</select></td>
     <td><button class="icon danger" type="button" data-delete-work>Delete</button></td>
   </tr>`;
 }
@@ -388,7 +388,9 @@ function calculateTimes() {
     hrs.value = Math.floor(diff / 60);
     mins.value = diff % 60;
   });
-  const total = collectWorkLogs().reduce((sum, log) => sum + log.hrs * 60 + log.mins, 0);
+  const total = collectWorkLogs()
+    .filter((log) => log.type !== "Break")
+    .reduce((sum, log) => sum + log.hrs * 60 + log.mins, 0);
   totalWorkTime.textContent = `${Math.floor(total / 60)} Hrs ${total % 60} Mins`;
 }
 
